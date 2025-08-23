@@ -1,0 +1,36 @@
+version: '3.8'
+services:
+  postgres:
+    container_name: shortis_pg
+    image: postgres:latest
+    ports:
+      - ${POSTGRES_PORT}:5432
+    environment: 
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    env_file:
+      - .env
+
+  redis:
+    container_name: shortis_redis
+    image: redis/redis-stack:latest
+    ports:
+      - ${REDIS_PORT}:6379
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_USERNAME: ${REDIS_USERNAME}
+      REDIS_HOST: ${REDIS_HOST}
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    env_file:
+      - .env
+
+volumes:
+  pg_data:
+  redis_data:

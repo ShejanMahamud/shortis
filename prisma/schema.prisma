@@ -1,0 +1,113 @@
+//url shortener service db schema
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String    @id @default(uuid())
+  email           String    @unique
+  name            String
+  role            Role      @default(USER)
+  password        String? 
+  accessToken     String?   @unique
+  accessTokenExp  DateTime?
+  refreshToken    String?   @unique
+  refreshTokenExp DateTime?
+  profilePicture  String?
+  isActive        Boolean   @default(true)
+  emailVerified   Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  urls   Url[]
+  clicks Click[]
+
+  @@index([email])
+  @@index([isActive])
+  @@map("users")
+}
+
+model Url {
+  id           String    @id @default(uuid())
+  originalUrl  String
+  slug         String    @unique
+  title        String? // Optional title for the URL
+  description  String? // Optional description
+  userId       String? // Nullable for anonymous URLs
+  isActive     Boolean   @default(true)
+  expiresAt    DateTime? // Optional expiration date
+  password     String? // Optional password protection
+  customDomain String? // For custom domain support
+  clickLimit   Int? // Optional click limit
+  totalClicks  Int       @default(0) // Denormalized click count for performance
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  // Relations
+  user      User?       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clicks    Click[]
+  analytics Analytics[]
+
+  @@index([slug])
+  @@index([userId])
+  @@index([isActive])
+  @@index([expiresAt])
+  @@index([createdAt])
+  @@map("urls")
+}
+
+model Click {
+  id        String   @id @default(uuid())
+  urlId     String
+  userId    String? // Nullable for anonymous clicks
+  ipAddress String?
+  userAgent String?
+  referer   String?
+  country   String?
+  city      String?
+  device    String?
+  browser   String?
+  os        String?
+  clickedAt DateTime @default(now())
+
+  // Relations
+  url  Url   @relation(fields: [urlId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([urlId])
+  @@index([userId])
+  @@index([clickedAt])
+  @@index([country])
+  @@map("clicks")
+}
+
+model Analytics {
+  id           String   @id @default(uuid())
+  urlId        String
+  date         DateTime @db.Date // Daily analytics
+  clickCount   Int      @default(0)
+  uniqueClicks Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  url Url @relation(fields: [urlId], references: [id], onDelete: Cascade)
+
+  @@unique([urlId, date]) // One record per URL per day
+  @@index([urlId])
+  @@index([date])
+  @@map("analytics")
+}
+
+enum Role {
+  USER
+  ADMIN
+  PREMIUM
+}

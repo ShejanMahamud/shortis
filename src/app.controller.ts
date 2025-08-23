@@ -4,11 +4,11 @@ import type { Request } from 'express';
 import { getSystemInfoJson } from './utils/system-info';
 
 @ApiExcludeController()
-@Controller()
+@Controller('')
 export class AppController {
   constructor() {}
 
-  @Get()
+  @Get('')
   getHello(@Req() req: Request) {
     return {
       success: true,

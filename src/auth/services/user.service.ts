@@ -92,4 +92,92 @@ export class UserService implements IUserService {
       throw error;
     }
   }
+
+  async findAllUsers(options: {
+    page: number;
+    limit: number;
+    filters?: Record<string, any>;
+  }): Promise<{
+    success: boolean;
+    message: string;
+    data: {
+      users: Partial<User>[];
+      pagination: {
+        page: number;
+        limit: number;
+        total: number;
+        pages: number;
+      };
+    };
+  }> {
+    try {
+      const { page, limit, filters = {} } = options;
+      const skip = (page - 1) * limit;
+
+      const [users, total] = await Promise.all([
+        this.prisma.user.findMany({
+          where: filters,
+          skip,
+          take: limit,
+          orderBy: { createdAt: 'desc' },
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            role: true,
+            isActive: true,
+            profilePicture: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        }),
+        this.prisma.user.count({ where: filters }),
+      ]);
+
+      const pages = Math.ceil(total / limit);
+
+      return {
+        success: true,
+        message: 'Users retrieved successfully',
+        data: {
+          users,
+          pagination: {
+            page,
+            limit,
+            total,
+            pages,
+          },
+        },
+      };
+    } catch (error) {
+      this.logger.error('Failed to fetch users', error);
+      throw new Error('Failed to fetch users');
+    }
+  }
+
+  async deleteUser(id: string): Promise<{
+    success: boolean;
+    message: string;
+  }> {
+    try {
+      const user = await this.findById(id);
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+
+      // Soft delete by deactivating the user
+      await this.deactivateUser(id);
+
+      return {
+        success: true,
+        message: 'User deleted successfully',
+      };
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      this.logger.error('Failed to delete user', error);
+      throw new Error('User deletion failed');
+    }
+  }
 }

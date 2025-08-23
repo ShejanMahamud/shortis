@@ -7,10 +7,11 @@ import { TokenService, UserService } from './services';
 import { AccessStrategy } from './strategies/access.strategy';
 import { GoogleStrategy } from './strategies/google.strategy';
 import { RefreshStrategy } from './strategies/refresh.strategy';
+import { UserManagementController } from './user-management.controller';
 
 @Module({
   imports: [JwtModule.register({})],
-  controllers: [AuthController],
+  controllers: [AuthController, UserManagementController],
   providers: [
     // Core Services
     AuthService,

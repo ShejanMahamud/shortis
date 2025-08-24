@@ -24,7 +24,6 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
 
     const user = {
       email: emails?.[0]?.value,
-      username: this.generateSafeUsername(name?.givenName, name?.familyName),
       name: name?.givenName || name?.familyName || name?.middleName || 'User',
       profilePicture: photos?.[0]?.value,
     };

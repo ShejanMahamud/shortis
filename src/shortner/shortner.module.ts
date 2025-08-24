@@ -1,14 +1,14 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
-import { ShortnerRepository } from './repositories/shortner.repository';
 import { AnalyticsService } from './services/analytics.service';
+import { ValidationService } from './services/validation.service';
 import { ShortnerController } from './shortner.controller';
 import { ShortnerService } from './shortner.service';
 
 @Module({
   imports: [PrismaModule],
   controllers: [ShortnerController],
-  providers: [ShortnerService, ShortnerRepository, AnalyticsService],
-  exports: [ShortnerService, ShortnerRepository, AnalyticsService],
+  providers: [ShortnerService, AnalyticsService, ValidationService],
+  exports: [ShortnerService, AnalyticsService, ValidationService],
 })
 export class ShortnerModule {}

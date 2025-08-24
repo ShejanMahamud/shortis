@@ -15,8 +15,6 @@ model User {
   name             String
   role             Role      @default(USER)
   password         String?
-  accessToken      String?   @unique
-  accessTokenExp   DateTime?
   refreshToken     String?   @unique
   refreshTokenExp  DateTime?
   profilePicture   String?
@@ -113,7 +111,7 @@ model Plan {
   stripePriceId   String?      @unique
   stripeProductId String?      @unique 
   price           Float        @default(0) 
-  currency        String       @default("usd")
+  currency        Currency     @default(USD)
   interval        PlanInterval 
   features        Json
   isActive        Boolean      @default(true)
@@ -135,12 +133,11 @@ model Subscription {
   stripeSubscriptionId String?            @unique 
   stripeCustomerId     String? 
   status               SubscriptionStatus @default(INACTIVE)
+  paymentMethod        PaymentMethod      @default(STRIPE)
   currentPeriodStart   DateTime?
   currentPeriodEnd     DateTime?
   cancelAtPeriodEnd    Boolean            @default(false)
   canceledAt           DateTime?
-  trialStart           DateTime?
-  trialEnd             DateTime?
   createdAt            DateTime           @default(now())
   updatedAt            DateTime           @updatedAt
 
@@ -162,11 +159,12 @@ model PaymentHistory {
   subscriptionId  String?
   stripePaymentId String?       @unique 
   stripeInvoiceId String?       @unique 
+  bkashPaymentId String?       @unique 
   amount          Float 
-  currency        String        @default("usd")
+  currency        Currency      @default(USD)
   status          PaymentStatus @default(PENDING)
   description     String?
-  paymentMethod   String?
+  paymentMethod   PaymentMethod @default(STRIPE)
   failureReason   String?
   paidAt          DateTime?
   createdAt       DateTime      @default(now())
@@ -187,6 +185,7 @@ model WebhookEvent {
   id              String    @id @default(uuid())
   stripeEventId   String    @unique 
   eventType       String
+  provider        PaymentMethod @default(STRIPE)
   processed       Boolean   @default(false)
   processingError String?
   data            Json 
@@ -229,4 +228,14 @@ enum PaymentStatus {
   FAILED
   CANCELED
   REFUNDED
+}
+
+enum Currency {
+  USD
+  BDT
+}
+
+enum PaymentMethod {
+  STRIPE
+  BKASH
 }

@@ -1,9 +1,12 @@
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import {
+  Inject,
   Injectable,
   Logger,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
+import type { Cache } from 'cache-manager';
 import { Request } from 'express';
 import { User } from 'generated/prisma';
 import { Util } from 'src/utils/util';
@@ -29,6 +32,7 @@ export class AuthService implements IAuthService {
   constructor(
     private readonly userService: UserService,
     private readonly tokenService: TokenService,
+    @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
   ) {}
 
   async loginOrCreateUser(
@@ -44,6 +48,8 @@ export class AuthService implements IAuthService {
         refreshToken: hashedRefreshToken,
         refreshTokenExp: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7), // 7 days
       });
+
+      await this.cacheManager.set(user.id, tokens.accessToken, 300000);
 
       return {
         success: true,
@@ -138,10 +144,16 @@ export class AuthService implements IAuthService {
 
   async logout(userId: string): Promise<IAuthResponse> {
     try {
+      const user = await this.userService.findById(userId);
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
       await this.userService.updateUser(userId, {
-        refreshToken: undefined,
-        refreshTokenExp: undefined,
+        refreshToken: null,
+        refreshTokenExp: null,
       });
+
+      await this.cacheManager.del(userId);
 
       return {
         success: true,

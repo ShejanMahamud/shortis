@@ -1,28 +1,30 @@
 import {
-    Body,
-    Controller,
-    Delete,
-    Get,
-    HttpCode,
-    HttpStatus,
-    Param,
-    Patch,
-    Query,
-    UseGuards,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseIntPipe,
+  Patch,
+  Query,
+  UseGuards,
 } from '@nestjs/common';
 import {
-    ApiBearerAuth,
-    ApiBody,
-    ApiOperation,
-    ApiParam,
-    ApiQuery,
-    ApiResponse,
-    ApiTags,
+  ApiBearerAuth,
+  ApiBody,
+  ApiOperation,
+  ApiParam,
+  ApiQuery,
+  ApiResponse,
+  ApiTags,
 } from '@nestjs/swagger';
-import { Role } from 'generated/prisma';
 import { AuthService } from './auth.service';
+import { Role, Roles } from './decorators';
 import { UpdateUserDto } from './dto';
 import { AccessAuthGuard } from './guards/access.guard';
+import { RolesGuard } from './guards/roles.guard';
 import { UserService } from './services/user.service';
 
 @ApiTags('User Management')
@@ -85,7 +87,7 @@ export class UserManagementController {
                   id: { type: 'string' },
                   email: { type: 'string' },
                   name: { type: 'string' },
-                  role: { type: 'string', enum: ['USER', 'ADMIN', 'PREMIUM'] },
+                  role: { type: 'string', enum: ['USER', 'ADMIN'] },
                   isActive: { type: 'boolean' },
                   profilePicture: { type: 'string' },
                   createdAt: { type: 'string', format: 'date-time' },
@@ -115,30 +117,14 @@ export class UserManagementController {
     status: 403,
     description: 'Forbidden - insufficient permissions (Admin required)',
   })
+  @Roles(Role.ADMIN)
+  @UseGuards(AccessAuthGuard, RolesGuard)
   async getAllUsers(
-    @Query('page') page = '1',
-    @Query('limit') limit = '10',
-    @Query('role') role?: Role,
-    @Query('isActive') isActive?: boolean,
+    @Query('limit', ParseIntPipe) limit: number = 10,
+    @Query('cursor') cursor?: string,
     @Query('search') search?: string,
   ) {
-    // TODO: Add role-based access control middleware
-    const filters: Record<string, any> = {
-      ...(role && { role }),
-      ...(isActive !== undefined && { isActive }),
-      ...(search && {
-        OR: [
-          { name: { contains: search, mode: 'insensitive' } },
-          { email: { contains: search, mode: 'insensitive' } },
-        ],
-      }),
-    };
-
-    return this.userService.findAllUsers({
-      page: parseInt(page, 10),
-      limit: parseInt(limit, 10),
-      filters,
-    });
+    return this.userService.findAllUsers(limit, cursor, search);
   }
 
   @Get(':id')
@@ -162,7 +148,7 @@ export class UserManagementController {
             id: { type: 'string' },
             email: { type: 'string' },
             name: { type: 'string' },
-            role: { type: 'string', enum: ['USER', 'ADMIN', 'PREMIUM'] },
+            role: { type: 'string', enum: ['USER', 'ADMIN'] },
             isActive: { type: 'boolean' },
             profilePicture: { type: 'string' },
             createdAt: { type: 'string', format: 'date-time' },
@@ -184,8 +170,9 @@ export class UserManagementController {
     status: 404,
     description: 'User not found',
   })
+  @Roles(Role.ADMIN)
+  @UseGuards(AccessAuthGuard, RolesGuard)
   async getUserById(@Param('id') id: string) {
-    // TODO: Add role-based access control middleware
     return this.authService.getCurrentUser(id);
   }
 
@@ -203,7 +190,7 @@ export class UserManagementController {
       updateRole: {
         summary: 'Update user role',
         value: {
-          role: 'PREMIUM',
+          role: 'USER',
         },
       },
       deactivateUser: {
@@ -216,7 +203,7 @@ export class UserManagementController {
         summary: 'Full profile update',
         value: {
           name: 'Updated Name',
-          role: 'PREMIUM',
+          role: 'USER',
           isActive: true,
         },
       },
@@ -237,7 +224,7 @@ export class UserManagementController {
             email: { type: 'string' },
             name: { type: 'string' },
             username: { type: 'string' },
-            role: { type: 'string', enum: ['USER', 'ADMIN', 'PREMIUM'] },
+            role: { type: 'string', enum: ['USER', 'ADMIN'] },
             isActive: { type: 'boolean' },
             profilePicture: { type: 'string' },
             updatedAt: { type: 'string', format: 'date-time' },
@@ -262,11 +249,12 @@ export class UserManagementController {
     status: 404,
     description: 'User not found',
   })
+  @Roles(Role.ADMIN)
+  @UseGuards(AccessAuthGuard, RolesGuard)
   async updateUserById(
     @Param('id') id: string,
     @Body() updateUserDto: UpdateUserDto,
   ) {
-    // TODO: Add role-based access control middleware
     return this.authService.updateUser(id, updateUserDto);
   }
 
@@ -294,8 +282,9 @@ export class UserManagementController {
     status: 404,
     description: 'User not found',
   })
+  @Roles(Role.ADMIN)
+  @UseGuards(AccessAuthGuard, RolesGuard)
   async deleteUser(@Param('id') id: string) {
-    // TODO: Add role-based access control middleware and implement soft delete
     return this.userService.deleteUser(id);
   }
 
@@ -340,8 +329,9 @@ export class UserManagementController {
     status: 404,
     description: 'User not found',
   })
+  @Roles(Role.ADMIN)
+  @UseGuards(AccessAuthGuard, RolesGuard)
   async toggleUserStatus(@Param('id') id: string) {
-    // TODO: Add role-based access control middleware
     const user = await this.userService.findById(id);
     if (!user) {
       throw new Error('User not found');
@@ -350,101 +340,5 @@ export class UserManagementController {
     return this.authService.updateUser(id, {
       isActive: !user.isActive,
     });
-  }
-
-  @Get(':id/urls')
-  @ApiOperation({ summary: "Get user's URLs (Admin only)" })
-  @ApiParam({
-    name: 'id',
-    description: 'User ID',
-    example: 'clm1234567890',
-  })
-  @ApiQuery({
-    name: 'page',
-    required: false,
-    description: 'Page number',
-    example: 1,
-  })
-  @ApiQuery({
-    name: 'limit',
-    required: false,
-    description: 'Number of URLs per page',
-    example: 10,
-  })
-  @ApiResponse({
-    status: 200,
-    description: "User's URLs retrieved successfully",
-    schema: {
-      type: 'object',
-      properties: {
-        success: { type: 'boolean', example: true },
-        message: {
-          type: 'string',
-          example: 'User URLs retrieved successfully',
-        },
-        data: {
-          type: 'object',
-          properties: {
-            urls: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  id: { type: 'string' },
-                  originalUrl: { type: 'string' },
-                  slug: { type: 'string' },
-                  title: { type: 'string' },
-                  isActive: { type: 'boolean' },
-                  clicks: { type: 'number' },
-                  createdAt: { type: 'string', format: 'date-time' },
-                },
-              },
-            },
-            pagination: {
-              type: 'object',
-              properties: {
-                page: { type: 'number' },
-                limit: { type: 'number' },
-                total: { type: 'number' },
-                pages: { type: 'number' },
-              },
-            },
-          },
-        },
-      },
-    },
-  })
-  @ApiResponse({
-    status: 401,
-    description: 'Unauthorized - invalid or expired token',
-  })
-  @ApiResponse({
-    status: 403,
-    description: 'Forbidden - insufficient permissions (Admin required)',
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'User not found',
-  })
-  getUserUrls(
-    @Param('id') id: string,
-    @Query('page') page = '1',
-    @Query('limit') limit = '10',
-  ) {
-    // TODO: Add role-based access control middleware
-    // TODO: Integrate with ShortnerService to get user's URLs
-    return {
-      success: true,
-      message: 'User URLs retrieved successfully',
-      data: {
-        urls: [],
-        pagination: {
-          page: parseInt(page, 10),
-          limit: parseInt(limit, 10),
-          total: 0,
-          pages: 0,
-        },
-      },
-    };
   }
 }

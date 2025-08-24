@@ -1,26 +1,50 @@
 import { Injectable } from '@nestjs/common';
-import { ClickEntity, UrlAnalytics } from '../interfaces/shortner.interface';
-import { ShortnerRepository } from '../repositories/shortner.repository';
+import { IApiResponse } from 'src/interfaces';
+import { PrismaService } from 'src/prisma/prisma.service';
+import {
+  ClickData,
+  ClickEntity,
+  IAnalyticsService,
+  UrlAnalytics,
+} from '../interfaces/shortner.interface';
 
 @Injectable()
-export class AnalyticsService {
-  constructor(private readonly shortnerRepository: ShortnerRepository) {}
+export class AnalyticsService implements IAnalyticsService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  private async getUrlClicks(
+    urlId: string,
+    startDate?: Date,
+    endDate?: Date,
+  ): Promise<ClickEntity[]> {
+    return this.prisma.click.findMany({
+      where: {
+        urlId,
+        clickedAt: {
+          gte: startDate,
+          lte: endDate,
+        },
+      },
+      orderBy: { clickedAt: 'desc' },
+    });
+  }
 
   async getUrlAnalytics(
     urlId: string,
     startDate?: Date,
     endDate?: Date,
-  ): Promise<UrlAnalytics> {
-    const clicks = await this.shortnerRepository.getUrlClicks(
-      urlId,
-      startDate,
-      endDate,
-    );
-    const analytics = await this.shortnerRepository.getUrlAnalytics(
-      urlId,
-      startDate,
-      endDate,
-    );
+  ): Promise<IApiResponse<UrlAnalytics>> {
+    const clicks = await this.getUrlClicks(urlId, startDate, endDate);
+    const analytics = await this.prisma.analytics.findMany({
+      where: {
+        urlId,
+        date: {
+          gte: startDate,
+          lte: endDate,
+        },
+      },
+      orderBy: { date: 'asc' },
+    });
 
     const totalClicks = clicks.length;
     const uniqueClicks = this.countUniqueClicks(clicks);
@@ -37,13 +61,17 @@ export class AnalyticsService {
     const clicksByReferer = this.groupClicksByField(clicks, 'referer');
 
     return {
-      totalClicks,
-      uniqueClicks,
-      clicksByDate,
-      clicksByCountry,
-      clicksByDevice,
-      clicksByBrowser,
-      clicksByReferer,
+      success: true,
+      message: 'URL analytics fetched successfully!',
+      data: {
+        totalClicks,
+        uniqueClicks,
+        clicksByDate,
+        clicksByCountry,
+        clicksByDevice,
+        clicksByBrowser,
+        clicksByReferer,
+      },
     };
   }
 
@@ -52,6 +80,39 @@ export class AnalyticsService {
       clicks.filter((click) => click.ipAddress).map((click) => click.ipAddress),
     );
     return uniqueIps.size;
+  }
+
+  private async createClick(data: ClickData): Promise<ClickEntity> {
+    return this.prisma.click.create({
+      data,
+    });
+  }
+
+  async createOrUpdateAnalytics(
+    urlId: string,
+    date: Date,
+    isUnique: boolean,
+  ): Promise<void> {
+    const dateOnly = new Date(date.toISOString().split('T')[0]);
+
+    await this.prisma.analytics.upsert({
+      where: {
+        urlId_date: {
+          urlId,
+          date: dateOnly,
+        },
+      },
+      update: {
+        clickCount: { increment: 1 },
+        uniqueClicks: isUnique ? { increment: 1 } : undefined,
+      },
+      create: {
+        urlId,
+        date: dateOnly,
+        clickCount: 1,
+        uniqueClicks: isUnique ? 1 : 0,
+      },
+    });
   }
 
   private groupClicksByField(
@@ -80,6 +141,17 @@ export class AnalyticsService {
       }));
   }
 
+  private async incrementClickCount(id: string): Promise<void> {
+    await this.prisma.url.update({
+      where: { id },
+      data: {
+        totalClicks: {
+          increment: 1,
+        },
+      },
+    });
+  }
+
   async recordClick(
     urlId: string,
     userId: string | null,
@@ -100,20 +172,16 @@ export class AnalyticsService {
       os: this.getOSFromUserAgent(userAgent),
     };
 
-    await this.shortnerRepository.createClick(clickData);
+    await this.createClick(clickData);
 
     // Check if this is a unique click (based on IP address)
     const isUnique = await this.isUniqueClick(urlId, ipAddress);
 
     // Update analytics
-    await this.shortnerRepository.createOrUpdateAnalytics(
-      urlId,
-      new Date(),
-      isUnique,
-    );
+    await this.createOrUpdateAnalytics(urlId, new Date(), isUnique);
 
     // Increment URL click count
-    await this.shortnerRepository.incrementClickCount(urlId);
+    await this.incrementClickCount(urlId);
   }
 
   private async isUniqueClick(
@@ -125,10 +193,7 @@ export class AnalyticsService {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const existingClicks = await this.shortnerRepository.getUrlClicks(
-      urlId,
-      today,
-    );
+    const existingClicks = await this.getUrlClicks(urlId, today);
 
     return !existingClicks.some((click) => click.ipAddress === ipAddress);
   }

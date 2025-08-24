@@ -1,11 +1,13 @@
 import {
   Body,
   Controller,
+  DefaultValuePipe,
   Delete,
   Get,
   HttpCode,
   HttpStatus,
   Param,
+  ParseIntPipe,
   Patch,
   Post,
   Query,
@@ -26,6 +28,10 @@ import { ShortnerService } from './shortner.service';
 export class ShortnerController {
   constructor(private readonly shortnerService: ShortnerService) {}
 
+  private getUserFromRequest(req: Request): IJwtPayload | null {
+    return req.user as IJwtPayload;
+  }
+
   @Post()
   @ApiOperation({ summary: 'Create a shortened URL' })
   @ApiResponse({ status: 201, description: 'URL created successfully' })
@@ -35,7 +41,7 @@ export class ShortnerController {
     @Body() createShortnerDto: CreateShortnerDto,
     @Req() req: Request,
   ) {
-    const userId = (req.user as IJwtPayload)?.sub; // Get user ID from auth context if available
+    const userId = this.getUserFromRequest(req)?.sub;
     return this.shortnerService.create(createShortnerDto, userId);
   }
 
@@ -43,16 +49,12 @@ export class ShortnerController {
   @ApiOperation({ summary: 'Get all URLs (paginated)' })
   @ApiResponse({ status: 200, description: 'URLs retrieved successfully' })
   async findAll(
-    @Query('page') page: string = '1',
-    @Query('limit') limit: string = '10',
     @Req() req: Request,
+    @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
+    @Query('cursor') cursor?: string,
   ) {
-    const userId = (req.user as IJwtPayload)?.sub; // Only return user's URLs if authenticated
-    return this.shortnerService.findAll(
-      userId,
-      parseInt(page, 10),
-      parseInt(limit, 10),
-    );
+    const userId = this.getUserFromRequest(req)?.sub;
+    return this.shortnerService.findAll(limit, userId, cursor);
   }
 
   @Get(':id')
@@ -61,7 +63,7 @@ export class ShortnerController {
   @ApiResponse({ status: 404, description: 'URL not found' })
   @ApiResponse({ status: 403, description: 'Unauthorized access' })
   async findOne(@Param('id') id: string, @Req() req: Request) {
-    const userId = (req.user as IJwtPayload)?.sub;
+    const userId = this.getUserFromRequest(req)?.sub;
     return this.shortnerService.findOne(id, userId);
   }
 
@@ -75,39 +77,8 @@ export class ShortnerController {
     @Query() analyticsDto: GetAnalyticsDto,
     @Req() req: Request,
   ) {
-    const userId = (req.user as IJwtPayload)?.sub;
+    const userId = this.getUserFromRequest(req)?.sub;
     return this.shortnerService.getAnalytics(id, analyticsDto, userId);
-  }
-
-  @Post(':slug/access')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Access password-protected URL' })
-  @ApiResponse({
-    status: 200,
-    description: 'Access granted, returns original URL',
-  })
-  @ApiResponse({ status: 401, description: 'Incorrect password' })
-  @ApiResponse({ status: 404, description: 'URL not found' })
-  async accessProtectedUrl(
-    @Param('slug') slug: string,
-    @Body() accessDto: AccessUrlDto,
-    @Req() req: Request,
-  ) {
-    const userId = (req.user as IJwtPayload)?.sub;
-    const ipAddress = req.ip;
-    const userAgent = req.get('User-Agent');
-    const referer = req.get('Referer');
-
-    const originalUrl = await this.shortnerService.redirectToUrl(
-      slug,
-      accessDto,
-      ipAddress,
-      userAgent,
-      referer,
-      userId,
-    );
-
-    return { originalUrl };
   }
 
   @Get('r/:slug')
@@ -121,17 +92,18 @@ export class ShortnerController {
   async redirect(
     @Param('slug') slug: string,
     @Req() req: Request,
+    @Body() accessDto: AccessUrlDto,
     @Res() res: Response,
   ) {
     try {
-      const userId = (req.user as IJwtPayload)?.sub;
+      const userId = this.getUserFromRequest(req)?.sub;
       const ipAddress = req.ip;
       const userAgent = req.get('User-Agent');
       const referer = req.get('Referer');
 
       const originalUrl = await this.shortnerService.redirectToUrl(
         slug,
-        undefined,
+        accessDto,
         ipAddress,
         userAgent,
         referer,
@@ -162,7 +134,7 @@ export class ShortnerController {
     @Body() updateShortnerDto: UpdateShortnerDto,
     @Req() req: Request,
   ) {
-    const userId = (req.user as IJwtPayload)?.sub;
+    const userId = this.getUserFromRequest(req)?.sub;
     return this.shortnerService.update(id, updateShortnerDto, userId);
   }
 
@@ -172,7 +144,7 @@ export class ShortnerController {
   @ApiResponse({ status: 404, description: 'URL not found' })
   @ApiResponse({ status: 403, description: 'Unauthorized access' })
   async toggleStatus(@Param('id') id: string, @Req() req: Request) {
-    const userId = (req.user as IJwtPayload)?.sub;
+    const userId = this.getUserFromRequest(req)?.sub;
     return this.shortnerService.toggleUrlStatus(id, userId);
   }
 
@@ -183,7 +155,7 @@ export class ShortnerController {
   @ApiResponse({ status: 404, description: 'URL not found' })
   @ApiResponse({ status: 403, description: 'Unauthorized access' })
   async remove(@Param('id') id: string, @Req() req: Request) {
-    const userId = (req.user as IJwtPayload)?.sub;
+    const userId = this.getUserFromRequest(req)?.sub;
     await this.shortnerService.remove(id, userId);
   }
 }

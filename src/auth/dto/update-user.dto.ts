@@ -1,11 +1,11 @@
 import { PartialType } from '@nestjs/mapped-types';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import {
-    IsBoolean,
-    IsDate,
-    IsEnum,
-    IsOptional,
-    IsString,
+  IsBoolean,
+  IsDate,
+  IsEnum,
+  IsOptional,
+  IsString,
 } from 'class-validator';
 import { Role } from 'generated/prisma';
 import { GoogleLoginDto } from './google-login.dto';
@@ -34,7 +34,7 @@ export class UpdateUserDto extends PartialType(GoogleLoginDto) {
   })
   @IsString()
   @IsOptional()
-  refreshToken?: string;
+  refreshToken?: string | null;
 
   @ApiPropertyOptional({
     description: 'Updated profile picture URL',
@@ -50,7 +50,7 @@ export class UpdateUserDto extends PartialType(GoogleLoginDto) {
   })
   @IsDate()
   @IsOptional()
-  refreshTokenExp?: Date;
+  refreshTokenExp?: Date | null;
 
   @ApiPropertyOptional({
     description: 'Access token (internal use)',

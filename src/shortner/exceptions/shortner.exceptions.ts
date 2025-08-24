@@ -1,9 +1,9 @@
 import {
-    BadRequestException,
-    ConflictException,
-    ForbiddenException,
-    NotFoundException,
-    UnauthorizedException,
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 
 export class InvalidUrlException extends BadRequestException {
@@ -13,7 +13,7 @@ export class InvalidUrlException extends BadRequestException {
 }
 
 export class UrlNotFoundException extends NotFoundException {
-  constructor(message = 'URL not found') {
+  constructor(message = 'URL not found for this id/user') {
     super(message);
   }
 }

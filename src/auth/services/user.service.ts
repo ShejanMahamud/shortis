@@ -1,9 +1,9 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { User } from 'generated/prisma';
+import { Prisma, User } from 'generated/prisma';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { GoogleLoginDto } from '../dto/google-login.dto';
 import { UpdateUserDto } from '../dto/update-user.dto';
-import { IUserService } from '../interfaces/auth.interface';
+import { IUserResponse, IUserService } from '../interfaces/auth.interface';
 
 @Injectable()
 export class UserService implements IUserService {
@@ -93,65 +93,52 @@ export class UserService implements IUserService {
     }
   }
 
-  async findAllUsers(options: {
-    page: number;
-    limit: number;
-    filters?: Record<string, any>;
-  }): Promise<{
-    success: boolean;
-    message: string;
-    data: {
-      users: Partial<User>[];
-      pagination: {
-        page: number;
-        limit: number;
-        total: number;
-        pages: number;
-      };
-    };
-  }> {
+  async findAllUsers(
+    limit: number,
+    cursor?: string,
+    search?: string,
+  ): Promise<IUserResponse<User[]>> {
     try {
-      const { page, limit, filters = {} } = options;
-      const skip = (page - 1) * limit;
-
-      const [users, total] = await Promise.all([
-        this.prisma.user.findMany({
-          where: filters,
-          skip,
-          take: limit,
-          orderBy: { createdAt: 'desc' },
-          select: {
-            id: true,
-            email: true,
-            name: true,
-            role: true,
-            isActive: true,
-            profilePicture: true,
-            createdAt: true,
-            updatedAt: true,
-          },
-        }),
-        this.prisma.user.count({ where: filters }),
-      ]);
-
-      const pages = Math.ceil(total / limit);
+      const queryOptions: Prisma.UserFindManyArgs = {
+        take: limit,
+        orderBy: {
+          createdAt: 'desc',
+        },
+      };
+      if (cursor) {
+        queryOptions.skip = 1;
+        queryOptions.cursor = { id: cursor };
+      }
+      if (search) {
+        queryOptions.where = {
+          OR: [
+            { name: { contains: search, mode: 'insensitive' } },
+            { email: { contains: search, mode: 'insensitive' } },
+          ],
+        };
+      }
+      const users = await this.prisma.user.findMany(queryOptions);
+      const hasNextPage = users.length > limit;
+      const nextCursor = users.length > 0 ? users[users.length - 1].id : null;
 
       return {
         success: true,
         message: 'Users retrieved successfully',
         data: {
-          users,
-          pagination: {
-            page,
-            limit,
-            total,
-            pages,
-          },
+          ...users,
+        },
+        meta: {
+          limit,
+          count: users.length,
+          hasNextPage,
+          nextCursor,
         },
       };
-    } catch (error) {
-      this.logger.error('Failed to fetch users', error);
-      throw new Error('Failed to fetch users');
+    } catch {
+      return {
+        success: false,
+        message: 'Failed to fetch users',
+      };
     }
   }
 

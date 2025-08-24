@@ -6,6 +6,18 @@ export interface IAuthResponse<T = any> {
   data?: T;
 }
 
+export interface IUserResponse<T> {
+  success: boolean;
+  message: string;
+  data?: T;
+  meta?: {
+    limit: number;
+    count: number;
+    hasNextPage: boolean;
+    nextCursor: string | null;
+  };
+}
+
 export interface ITokenPair {
   accessToken: string;
   refreshToken: string;
@@ -20,6 +32,11 @@ export interface ITokenService {
 export interface IUserService {
   findByEmail(email: string): Promise<User | null>;
   findById(id: string): Promise<User | null>;
+  findAllUsers(
+    limit: number,
+    cursor?: string,
+    search?: string,
+  ): Promise<IUserResponse<User[]>>;
   createUser(data: any): Promise<User>;
   updateUser(id: string, data: any): Promise<User>;
   upsertUser(email: string, data: any): Promise<User>;

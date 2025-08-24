@@ -8,7 +8,7 @@ export class Util {
   public static async hash(password: string): Promise<string> {
     return await argon.hash(password);
   }
-  public static async match(password: string, hash: string): Promise<boolean> {
+  public static async match(hash: string, password: string): Promise<boolean> {
     return await argon.verify(hash, password);
   }
   public static generateRandomString(length: number): string {

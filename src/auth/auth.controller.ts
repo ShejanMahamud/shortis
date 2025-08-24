@@ -10,12 +10,10 @@ import {
   Res,
   UseGuards,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { AuthGuard } from '@nestjs/passport';
 import {
   ApiBearerAuth,
   ApiBody,
-  ApiExcludeEndpoint,
   ApiOperation,
   ApiResponse,
   ApiTags,
@@ -24,27 +22,32 @@ import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { GoogleLoginDto, RefreshTokenDto, UpdateUserDto } from './dto';
+import { RefreshAuthGuard } from './guards';
 import { AccessAuthGuard } from './guards/access.guard';
 
-@ApiTags('Authentication & User Management')
+@ApiTags('Authentication')
 @Controller('auth')
 export class AuthController {
-  constructor(
-    private readonly authService: AuthService,
-    private readonly config: ConfigService,
-  ) {}
+  constructor(private readonly authService: AuthService) {}
 
   @Get('google')
   @UseGuards(AuthGuard('google'))
-  @ApiOperation({ summary: 'Initiate Google OAuth login' })
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
+  @ApiOperation({
+    summary: 'Initiate Google OAuth login',
+    description: 'Redirects to Google OAuth consent screen for authentication.',
+  })
   @ApiResponse({
     status: 302,
-    description: 'Redirects to Google OAuth consent screen',
+    description: 'Redirect to Google OAuth consent screen',
   })
-  @ApiExcludeEndpoint() // This is typically not shown in Swagger as it's a redirect
+  @ApiResponse({
+    status: 429,
+    description: 'Too many OAuth attempts',
+  })
   public googleAuth(@Req() req: Request, @Res() res: Response) {
-    if (req.user) {
-      return res.redirect(`${this.config.get('FRONTEND_URL')}/dashboard`);
+    if (req?.user as GoogleLoginDto) {
+      return res.redirect(`${req.protocol}://${req.get('host')}/v1/api`);
     }
   }
 
@@ -66,14 +69,8 @@ export class AuthController {
     status: 429,
     description: 'Too many authentication attempts',
   })
-  @ApiExcludeEndpoint() // This is typically not shown in Swagger as it's handled by Google
-  public async googleAuthCallback(@Req() req: Request, @Res() res: Response) {
-    const { data } = await this.authService.loginOrCreateUser(
-      req?.user as GoogleLoginDto,
-    );
-    return res.redirect(
-      `${this.config.get('FRONTEND_URL')}/auth/callback?accessToken=${data?.accessToken}&refreshToken=${data?.refreshToken}`,
-    );
+  public googleAuthCallback(@Req() req: Request) {
+    return this.authService.loginOrCreateUser(req?.user as GoogleLoginDto);
   }
 
   @UseGuards(AccessAuthGuard)
@@ -123,6 +120,7 @@ export class AuthController {
     return this.authService.me(req);
   }
 
+  @UseGuards(RefreshAuthGuard)
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Refresh access token using refresh token' })

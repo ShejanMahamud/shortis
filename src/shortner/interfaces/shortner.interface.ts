@@ -1,3 +1,11 @@
+import { IApiResponse } from 'src/interfaces';
+import {
+  AccessUrlDto,
+  CreateShortnerDto,
+  GetAnalyticsDto,
+  UpdateShortnerDto,
+} from '../dto';
+
 export interface UrlEntity {
   id: string;
   originalUrl: string;
@@ -13,6 +21,13 @@ export interface UrlEntity {
   totalClicks: number;
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface IMeta {
+  limit: number;
+  count: number;
+  nextCursor: string | null;
+  hasNextPage: boolean;
 }
 
 export interface ClickEntity {
@@ -81,4 +96,68 @@ export interface ClickData {
   ipAddress?: string | null;
   userAgent?: string | null;
   referer?: string | null;
+}
+
+export interface IShortnerService {
+  create(
+    createShortnerDto: CreateShortnerDto,
+    userId?: string,
+  ): Promise<IApiResponse<UrlEntity>>;
+  findAll(
+    limit: number,
+    cursor?: string,
+    userId?: string,
+  ): Promise<IApiResponse<UrlEntity[], IMeta>>;
+  findOne(id: string, userId?: string): Promise<IApiResponse<UrlEntity>>;
+  findBySlug(slug: string): Promise<IApiResponse<UrlEntity>>;
+  redirectToUrl(
+    slug: string,
+    accessDto?: AccessUrlDto,
+    ipAddress?: string,
+    userAgent?: string,
+    referer?: string,
+    userId?: string,
+  ): Promise<string>;
+  update(
+    id: string,
+    updateShortnerDto: UpdateShortnerDto,
+    userId?: string,
+  ): Promise<IApiResponse<UrlEntity>>;
+  remove(
+    id: string,
+    userId?: string,
+  ): Promise<IApiResponse<{ success: boolean; message: string }>>;
+  getAnalytics(
+    id: string,
+    analyticsDto: GetAnalyticsDto,
+    userId?: string,
+  ): Promise<IApiResponse<UrlAnalytics>>;
+  toggleUrlStatus(
+    id: string,
+    userId?: string,
+  ): Promise<IApiResponse<UrlEntity>>;
+}
+
+export interface IValidationService {
+  validateUrl(url: string): boolean;
+  validateExpirationDate(date?: Date): boolean;
+  generateSlug(length: number): string;
+  validateUrlAccess(url: UrlEntity, password?: string): Promise<void>;
+  generateUniqueSlug(customSlug?: string): Promise<string>;
+  checkSlugExists(slug: string): Promise<boolean>;
+}
+
+export interface IAnalyticsService {
+  getUrlAnalytics(
+    urlId: string,
+    startDate?: Date,
+    endDate?: Date,
+  ): Promise<IApiResponse<UrlAnalytics>>;
+  recordClick(
+    urlId: string,
+    userId: string | null,
+    ipAddress: string | null,
+    userAgent: string | null,
+    referer: string | null,
+  ): Promise<void>;
 }

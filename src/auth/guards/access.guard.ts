@@ -12,13 +12,12 @@ export class AccessAuthGuard extends AuthGuard('access') {
   }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    // Run the original AuthGuard logic first
     const result = (await super.canActivate(context)) as boolean;
     if (!result) return false;
 
     const request: Request = context.switchToHttp().getRequest();
     const user = request.user as IJwtPayload;
-    if (!user) return false; // safety check
+    if (!user) return false;
 
     const token = await this.cacheManager.get(user.sub);
     return !!token;

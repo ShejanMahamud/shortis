@@ -4,6 +4,7 @@ import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AuthModule } from './auth/auth.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { QueueModule } from './queue/queue.module';
 import { ShortnerModule } from './shortner/shortner.module';
 
 @Module({
@@ -18,6 +19,7 @@ import { ShortnerModule } from './shortner/shortner.module';
     PrismaModule,
     AuthModule,
     ShortnerModule,
+    QueueModule,
   ],
   controllers: [AppController],
   providers: [],

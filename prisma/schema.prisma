@@ -39,7 +39,8 @@ model Url {
   id           String    @id @default(uuid())
   originalUrl  String
   slug         String    @unique
-  title        String? 
+  title        String?
+  qrCode       String?
   description  String? 
   userId       String? 
   isActive     Boolean   @default(true)

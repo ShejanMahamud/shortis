@@ -13,7 +13,6 @@ import {
   Query,
   Req,
   Res,
-  UseGuards,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -22,7 +21,6 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
-import { AccessAuthGuard } from 'src/auth';
 import { IJwtPayload } from '../auth/interfaces/auth.interface';
 import { AccessUrlDto } from './dto/access-url.dto';
 import { CreateShortnerDto } from './dto/create-shortner.dto';
@@ -32,7 +30,7 @@ import { ShortnerService } from './shortner.service';
 
 @ApiTags('URL Shortener')
 @ApiBearerAuth()
-@UseGuards(AccessAuthGuard)
+// @UseGuards(AccessAuthGuard)
 @Controller('shortner')
 export class ShortnerController {
   constructor(private readonly shortnerService: ShortnerService) {}

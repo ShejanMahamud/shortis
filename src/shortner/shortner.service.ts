@@ -97,8 +97,9 @@ export class ShortnerService implements IShortnerService {
     if (userId) {
       queryOptions.where = { userId };
     }
-
+    const start = Date.now();
     const urls = await this.prisma.url.findMany(queryOptions);
+    console.log('DB Query Time:', Date.now() - start, 'ms');
     const hasNextPage = urls.length > limit;
     const nextCursor = urls.length > 0 ? urls[urls.length - 1].id : null;
 

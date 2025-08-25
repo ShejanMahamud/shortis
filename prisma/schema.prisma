@@ -202,7 +202,6 @@ model WebhookEvent {
 enum Role {
   USER
   ADMIN
-  PREMIUM
 }
 
 enum PlanInterval {

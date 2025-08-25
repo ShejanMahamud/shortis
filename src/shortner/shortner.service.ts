@@ -1,4 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import type { Cache } from 'cache-manager';
 import { Prisma } from 'generated/prisma';
 import { IApiResponse } from 'src/interfaces';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -14,6 +16,7 @@ import {
 } from './exceptions/shortner.exceptions';
 import {
   IMeta,
+  IMinimalUrl,
   IShortnerService,
   UpdateUrlData,
   UrlAnalytics,
@@ -21,15 +24,16 @@ import {
 } from './interfaces/shortner.interface';
 import { AnalyticsService } from './services/analytics.service';
 import { ValidationService } from './services/validation.service';
-
 @Injectable()
 export class ShortnerService implements IShortnerService {
   private readonly logger = new Logger(ShortnerService.name);
+  private readonly SLUG_CACHE_TTL = 30000;
 
   constructor(
     private readonly validationService: ValidationService,
     private readonly analyticsService: AnalyticsService,
     private readonly prisma: PrismaService,
+    @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
   ) {}
 
   async create(
@@ -37,30 +41,27 @@ export class ShortnerService implements IShortnerService {
     userId?: string,
   ): Promise<IApiResponse<UrlEntity>> {
     try {
-      this.validationService.validateUrl(createShortnerDto.originalUrl);
+      const { customSlug, ...restDto } = createShortnerDto;
+
+      this.validationService.validateUrl(restDto.originalUrl);
       this.validationService.validateExpirationDate(
-        createShortnerDto.expiresAt
-          ? new Date(createShortnerDto.expiresAt)
-          : undefined,
+        restDto.expiresAt ? new Date(restDto.expiresAt) : undefined,
       );
 
       // Generate unique slug
-      const uniqueSlug = await this.validationService.generateUniqueSlug(
-        createShortnerDto.customSlug,
-      );
+      const uniqueSlug =
+        await this.validationService.generateUniqueSlug(customSlug);
 
       //hash if password provided by user
-      if (createShortnerDto.password) {
-        createShortnerDto.password = await Util.hash(
-          createShortnerDto.password,
-        );
+      if (restDto.password) {
+        restDto.password = await Util.hash(restDto.password);
       }
 
       const url = await this.prisma.url.create({
         data: {
-          slug: createShortnerDto.customSlug || uniqueSlug,
+          slug: customSlug || uniqueSlug,
           userId,
-          ...createShortnerDto,
+          ...restDto,
         },
       });
       this.logger.log(`Created URL: ${url.slug} for ${url.originalUrl}`);
@@ -80,8 +81,8 @@ export class ShortnerService implements IShortnerService {
 
   async findAll(
     limit: number,
-    cursor?: string,
     userId?: string,
+    cursor?: string,
   ): Promise<IApiResponse<UrlEntity[], IMeta>> {
     const queryOptions: Prisma.UrlFindManyArgs = {
       orderBy: { createdAt: 'desc' },
@@ -143,9 +144,13 @@ export class ShortnerService implements IShortnerService {
     };
   }
 
-  async findBySlug(slug: string): Promise<IApiResponse<UrlEntity>> {
+  async findBySlug(
+    slug: string,
+    query?: Omit<Prisma.UrlFindUniqueArgs, 'where'>,
+  ): Promise<IApiResponse<UrlEntity>> {
     const url = await this.prisma.url.findUnique({
       where: { slug },
+      ...query,
       include: {
         user: {
           select: {
@@ -168,6 +173,53 @@ export class ShortnerService implements IShortnerService {
     };
   }
 
+  async findBySlugMinimal(slug: string): Promise<IApiResponse<IMinimalUrl>> {
+    const cachedKey = `url:${slug}`;
+    const cachedUrl = await this.cacheManager.get<IMinimalUrl>(cachedKey);
+    if (cachedUrl) {
+      return {
+        success: true,
+        message: 'Url fetched successfully from cache!',
+        data: cachedUrl,
+      };
+    }
+
+    const url = await this.prisma.url.findUnique({
+      where: { slug },
+      select: {
+        id: true,
+        originalUrl: true,
+        slug: true,
+        password: true,
+        isActive: true,
+        expiresAt: true,
+        clickLimit: true,
+        totalClicks: true,
+      },
+    });
+
+    if (!url) {
+      throw new UrlNotFoundException();
+    }
+
+    const minimalUrl: IMinimalUrl = {
+      ...url,
+      password: url.password ?? null,
+      isActive: url.isActive ?? null,
+      expiresAt: url.expiresAt ?? null,
+      clickLimit: url.clickLimit ?? null,
+      totalClicks: url.totalClicks ?? null,
+    };
+
+    await this.cacheManager.set(cachedKey, minimalUrl, this.SLUG_CACHE_TTL);
+
+    return {
+      success: true,
+      message: 'Url fetched successfully!',
+      data: minimalUrl,
+    };
+  }
+
   async redirectToUrl(
     slug: string,
     accessDto?: AccessUrlDto,
@@ -176,7 +228,7 @@ export class ShortnerService implements IShortnerService {
     referer?: string,
     userId?: string,
   ): Promise<string> {
-    const data = await this.findBySlug(slug);
+    const data = await this.findBySlugMinimal(slug);
 
     if (!data.data) {
       throw new UrlNotFoundException();

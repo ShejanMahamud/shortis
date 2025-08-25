@@ -84,8 +84,8 @@ export class UserService implements IUserService {
     try {
       return await this.updateUser(id, {
         isActive: false,
-        refreshToken: undefined,
-        refreshTokenExp: undefined,
+        refreshToken: null,
+        refreshTokenExp: null,
       });
     } catch (error) {
       this.logger.error('Failed to deactivate user', error);

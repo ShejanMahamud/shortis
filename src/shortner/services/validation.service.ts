@@ -1,4 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import type { Cache } from 'cache-manager';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Util } from 'src/utils/util';
 import {
@@ -9,12 +11,16 @@ import {
   UrlExpiredException,
   UrlInactiveException,
 } from '../exceptions';
-import { IValidationService, UrlEntity } from '../interfaces';
+import { IMinimalUrl, IValidationService } from '../interfaces';
 
 @Injectable()
 export class ValidationService implements IValidationService {
   private readonly logger = new Logger(ValidationService.name);
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly SLUG_CACHE_TTL = 30000;
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
+  ) {}
 
   generateSlug(length: number = 6): string {
     const characters =
@@ -52,11 +58,18 @@ export class ValidationService implements IValidationService {
   }
 
   async checkSlugExists(slug: string): Promise<boolean> {
+    // Check cache first
+    const cached = await this.cacheManager.get<boolean>(`slug:${slug}`);
+    if (cached) {
+      return cached;
+    }
     const url = await this.prisma.url.findUnique({
       where: { slug },
       select: { id: true },
     });
-    return !!url;
+    const exists = !!url;
+    await this.cacheManager.set(`slug:${slug}`, exists, this.SLUG_CACHE_TTL);
+    return exists;
   }
 
   validateUrl(url: string): boolean {
@@ -78,7 +91,7 @@ export class ValidationService implements IValidationService {
     return true;
   }
 
-  async validateUrlAccess(url: UrlEntity, password?: string): Promise<void> {
+  async validateUrlAccess(url: IMinimalUrl, password?: string): Promise<void> {
     // Check if URL is active
     if (!url.isActive) {
       throw new UrlInactiveException();

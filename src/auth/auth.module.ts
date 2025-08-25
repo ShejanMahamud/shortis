@@ -4,9 +4,7 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { AccessAuthGuard, RefreshAuthGuard } from './guards';
 import { TokenService, UserService } from './services';
-import { AccessStrategy } from './strategies/access.strategy';
-import { GoogleStrategy } from './strategies/google.strategy';
-import { RefreshStrategy } from './strategies/refresh.strategy';
+import { AccessStrategy, GoogleStrategy, RefreshStrategy } from './strategies';
 import { UserManagementController } from './user-management.controller';
 
 @Module({

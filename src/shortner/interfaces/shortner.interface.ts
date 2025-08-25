@@ -1,3 +1,4 @@
+import { Prisma } from 'generated/prisma';
 import { IApiResponse } from 'src/interfaces';
 import {
   AccessUrlDto,
@@ -98,6 +99,17 @@ export interface ClickData {
   referer?: string | null;
 }
 
+export interface IMinimalUrl {
+  id: string;
+  originalUrl: string;
+  slug: string;
+  password?: string | null;
+  isActive: boolean | null;
+  expiresAt?: Date | null;
+  clickLimit?: number | null;
+  totalClicks: number;
+}
+
 export interface IShortnerService {
   create(
     createShortnerDto: CreateShortnerDto,
@@ -107,9 +119,17 @@ export interface IShortnerService {
     limit: number,
     cursor?: string,
     userId?: string,
+    query?: Omit<Prisma.UrlFindUniqueArgs, 'where'>,
   ): Promise<IApiResponse<UrlEntity[], IMeta>>;
-  findOne(id: string, userId?: string): Promise<IApiResponse<UrlEntity>>;
-  findBySlug(slug: string): Promise<IApiResponse<UrlEntity>>;
+  findOne(
+    id: string,
+    userId?: string,
+    query?: Omit<Prisma.UrlFindUniqueArgs, 'where'>,
+  ): Promise<IApiResponse<UrlEntity>>;
+  findBySlug(
+    slug: string,
+    query?: Omit<Prisma.UrlFindUniqueArgs, 'where'>,
+  ): Promise<IApiResponse<UrlEntity>>;
   redirectToUrl(
     slug: string,
     accessDto?: AccessUrlDto,
@@ -122,6 +142,7 @@ export interface IShortnerService {
     id: string,
     updateShortnerDto: UpdateShortnerDto,
     userId?: string,
+    query?: Omit<Prisma.UrlFindUniqueArgs, 'where'>,
   ): Promise<IApiResponse<UrlEntity>>;
   remove(
     id: string,

@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  DefaultValuePipe,
   Delete,
   Get,
   HttpCode,
@@ -28,9 +29,10 @@ import { RolesGuard } from './guards/roles.guard';
 import { UserService } from './services/user.service';
 
 @ApiTags('User Management')
+@ApiBearerAuth()
 @Controller('users')
 @UseGuards(AccessAuthGuard)
-@ApiBearerAuth()
+@Roles(Role.ADMIN)
 export class UserManagementController {
   constructor(
     private readonly userService: UserService,
@@ -117,10 +119,8 @@ export class UserManagementController {
     status: 403,
     description: 'Forbidden - insufficient permissions (Admin required)',
   })
-  @Roles(Role.ADMIN)
-  @UseGuards(AccessAuthGuard, RolesGuard)
   async getAllUsers(
-    @Query('limit', ParseIntPipe) limit: number = 10,
+    @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
     @Query('cursor') cursor?: string,
     @Query('search') search?: string,
   ) {
@@ -170,7 +170,6 @@ export class UserManagementController {
     status: 404,
     description: 'User not found',
   })
-  @Roles(Role.ADMIN)
   @UseGuards(AccessAuthGuard, RolesGuard)
   async getUserById(@Param('id') id: string) {
     return this.authService.getCurrentUser(id);
@@ -249,7 +248,6 @@ export class UserManagementController {
     status: 404,
     description: 'User not found',
   })
-  @Roles(Role.ADMIN)
   @UseGuards(AccessAuthGuard, RolesGuard)
   async updateUserById(
     @Param('id') id: string,
@@ -282,7 +280,6 @@ export class UserManagementController {
     status: 404,
     description: 'User not found',
   })
-  @Roles(Role.ADMIN)
   @UseGuards(AccessAuthGuard, RolesGuard)
   async deleteUser(@Param('id') id: string) {
     return this.userService.deleteUser(id);
@@ -329,7 +326,6 @@ export class UserManagementController {
     status: 404,
     description: 'User not found',
   })
-  @Roles(Role.ADMIN)
   @UseGuards(AccessAuthGuard, RolesGuard)
   async toggleUserStatus(@Param('id') id: string) {
     const user = await this.userService.findById(id);

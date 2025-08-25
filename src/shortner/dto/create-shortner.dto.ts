@@ -1,15 +1,15 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import {
-    IsBoolean,
-    IsDateString,
-    IsInt,
-    IsOptional,
-    IsString,
-    IsUrl,
-    MaxLength,
-    Min,
-    MinLength,
+  IsBoolean,
+  IsDateString,
+  IsInt,
+  IsOptional,
+  IsString,
+  IsUrl,
+  MaxLength,
+  Min,
+  MinLength,
 } from 'class-validator';
 
 export class CreateShortnerDto {

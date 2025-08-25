@@ -62,7 +62,7 @@ export class AuthService implements IAuthService {
     }
   }
 
-  async getCurrentUser(userId: string): Promise<IAuthResponse<User>> {
+  async getCurrentUser(userId: string): Promise<IAuthResponse<Partial<User>>> {
     try {
       const user = await this.userService.findById(userId);
 
@@ -92,7 +92,10 @@ export class AuthService implements IAuthService {
       const decoded = await this.tokenService.verifyRefreshToken(refreshToken);
 
       // Find user
-      const user = await this.userService.findById(decoded.sub);
+      const user = await this.userService.findById(decoded.sub, {
+        refreshToken: true,
+        refreshTokenExp: true,
+      });
       if (!user) {
         throw new NotFoundException('User not found');
       }
@@ -117,7 +120,7 @@ export class AuthService implements IAuthService {
 
       // Update stored refresh token
       const hashedRefreshToken = await Util.hash(newTokens.refreshToken);
-      await this.userService.updateUser(user.id, {
+      await this.userService.updateUser(user.id!, {
         refreshToken: hashedRefreshToken,
         refreshTokenExp: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       });
@@ -166,7 +169,7 @@ export class AuthService implements IAuthService {
   }
 
   // Legacy method for backward compatibility
-  async me(req: Request): Promise<IAuthResponse<User>> {
+  async me(req: Request): Promise<IAuthResponse<Partial<User>>> {
     const payload = req.user as IJwtPayload;
     return this.getCurrentUser(payload.sub);
   }

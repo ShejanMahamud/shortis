@@ -1,0 +1,241 @@
+//url shortener service db schema
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               String    @id @default(uuid())
+  email            String    @unique
+  name             String
+  role             Role      @default(USER)
+  password         String?
+  refreshToken     String?   @unique
+  refreshTokenExp  DateTime?
+  profilePicture   String?
+  isActive         Boolean   @default(true)
+  emailVerified    Boolean   @default(false)
+  stripeCustomerId String?   @unique 
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  urls           Url[]
+  clicks         Click[]
+  subscriptions  Subscription[]
+  paymentHistory PaymentHistory[]
+
+  @@index([email])
+  @@index([isActive])
+  @@index([stripeCustomerId])
+  @@map("users")
+}
+
+model Url {
+  id           String    @id @default(uuid())
+  originalUrl  String
+  slug         String    @unique
+  title        String?
+  qrCode       String?
+  description  String? 
+  userId       String? 
+  isActive     Boolean   @default(true)
+  expiresAt    DateTime?
+  password     String?
+  customDomain String? 
+  clickLimit   Int?
+  totalClicks  Int       @default(0) 
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user      User?       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clicks    Click[]
+  analytics Analytics[]
+
+  @@index([slug])
+  @@index([userId])
+  @@index([isActive])
+  @@index([expiresAt])
+  @@index([createdAt])
+  @@map("urls")
+}
+
+model Click {
+  id        String   @id @default(uuid())
+  urlId     String
+  userId    String? 
+  ipAddress String?
+  userAgent String?
+  referer   String?
+  country   String?
+  city      String?
+  device    String?
+  browser   String?
+  os        String?
+  clickedAt DateTime @default(now())
+
+  url  Url   @relation(fields: [urlId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([urlId])
+  @@index([userId])
+  @@index([clickedAt])
+  @@index([country])
+  @@map("clicks")
+}
+
+model Analytics {
+  id           String   @id @default(uuid())
+  urlId        String
+  date         DateTime @db.Date 
+  clickCount   Int      @default(0)
+  uniqueClicks Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  url Url @relation(fields: [urlId], references: [id], onDelete: Cascade)
+
+  @@unique([urlId, date])
+  @@index([urlId])
+  @@index([date])
+  @@map("analytics")
+}
+
+model Plan {
+  id              String       @id @default(uuid())
+  name            String       @unique 
+  description     String?
+  stripePriceId   String?      @unique
+  stripeProductId String?      @unique 
+  price           Float        @default(0) 
+  currency        Currency     @default(USD)
+  interval        PlanInterval 
+  features        Json
+  isActive        Boolean      @default(true)
+  sortOrder       Int          @default(0) 
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  subscriptions Subscription[]
+
+  @@index([isActive])
+  @@index([stripePriceId])
+  @@map("plans")
+}
+
+model Subscription {
+  id                   String             @id @default(uuid())
+  userId               String
+  planId               String
+  stripeSubscriptionId String?            @unique 
+  stripeCustomerId     String? 
+  status               SubscriptionStatus @default(INACTIVE)
+  paymentMethod        PaymentMethod      @default(STRIPE)
+  currentPeriodStart   DateTime?
+  currentPeriodEnd     DateTime?
+  cancelAtPeriodEnd    Boolean            @default(false)
+  canceledAt           DateTime?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan           Plan             @relation(fields: [planId], references: [id], onDelete: Restrict)
+  paymentHistory PaymentHistory[]
+
+  @@index([userId])
+  @@index([planId])
+  @@index([status])
+  @@index([stripeSubscriptionId])
+  @@index([currentPeriodEnd])
+  @@map("subscriptions")
+}
+
+model PaymentHistory {
+  id              String        @id @default(uuid())
+  userId          String
+  subscriptionId  String?
+  stripePaymentId String?       @unique 
+  stripeInvoiceId String?       @unique 
+  bkashPaymentId String?       @unique 
+  amount          Float 
+  currency        Currency      @default(USD)
+  status          PaymentStatus @default(PENDING)
+  description     String?
+  paymentMethod   PaymentMethod @default(STRIPE)
+  failureReason   String?
+  paidAt          DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscription Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([subscriptionId])
+  @@index([status])
+  @@index([stripePaymentId])
+  @@index([paidAt])
+  @@map("payment_history")
+}
+
+model WebhookEvent {
+  id              String    @id @default(uuid())
+  stripeEventId   String    @unique 
+  eventType       String
+  provider        PaymentMethod @default(STRIPE)
+  processed       Boolean   @default(false)
+  processingError String?
+  data            Json 
+  createdAt       DateTime  @default(now())
+  processedAt     DateTime?
+
+  @@index([stripeEventId])
+  @@index([processed])
+  @@index([eventType])
+  @@index([createdAt])
+  @@map("webhook_events")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum PlanInterval {
+  MONTH
+  YEAR
+  WEEK
+  DAY
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  INACTIVE
+  PAST_DUE
+  CANCELED
+  UNPAID
+  TRIALING
+  PAUSED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  CANCELED
+  REFUNDED
+}
+
+enum Currency {
+  USD
+  BDT
+}
+
+enum PaymentMethod {
+  STRIPE
+  BKASH
+}

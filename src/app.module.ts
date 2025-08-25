@@ -6,6 +6,7 @@ import { AuthModule } from './auth/auth.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { QueueModule } from './queue/queue.module';
 import { ShortnerModule } from './shortner/shortner.module';
+import { TaskModule } from './task/task.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { ShortnerModule } from './shortner/shortner.module';
     CacheModule.register({
       isGlobal: true,
     }),
+    TaskModule,
     PrismaModule,
     AuthModule,
     ShortnerModule,

@@ -138,6 +138,7 @@ export interface IShortnerService {
     referer?: string,
     userId?: string,
   ): Promise<string>;
+  generateQrCode(url: string, slug: string): Promise<Buffer>;
   update(
     id: string,
     updateShortnerDto: UpdateShortnerDto,

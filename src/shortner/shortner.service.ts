@@ -1,9 +1,16 @@
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+} from '@nestjs/common';
 import type { Cache } from 'cache-manager';
 import { Prisma } from 'generated/prisma';
+import QRCode from 'qrcode';
 import { IApiResponse } from 'src/interfaces';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { UploadService } from 'src/upload/upload.service';
 import { Util } from 'src/utils/util';
 import { AccessUrlDto } from './dto/access-url.dto';
 import { CreateShortnerDto } from './dto/create-shortner.dto';
@@ -33,6 +40,7 @@ export class ShortnerService implements IShortnerService {
     private readonly validationService: ValidationService,
     private readonly analyticsService: AnalyticsService,
     private readonly prisma: PrismaService,
+    private readonly upload: UploadService,
     @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
   ) {}
 
@@ -64,6 +72,7 @@ export class ShortnerService implements IShortnerService {
           ...restDto,
         },
       });
+      await this.generateQrCode(url.originalUrl, url.slug);
       this.logger.log(`Created URL: ${url.slug} for ${url.originalUrl}`);
 
       return {
@@ -76,6 +85,17 @@ export class ShortnerService implements IShortnerService {
         throw new SlugAlreadyExistsException(createShortnerDto.customSlug!);
       }
       throw error;
+    }
+  }
+
+  async generateQrCode(url: string, slug: string): Promise<Buffer> {
+    try {
+      const buffer = await QRCode.toBuffer(url, { type: 'png' });
+      await this.upload.enqueueUpload(buffer, slug);
+      return buffer;
+    } catch (err) {
+      console.error('Error generating QR code:', err);
+      throw new InternalServerErrorException('Could not generate QR code');
     }
   }
 

@@ -1,21 +1,10 @@
-import { User } from 'generated/prisma';
+import { Prisma, User } from 'generated/prisma';
+import { IApiResponse } from 'src/interfaces';
 
 export interface IAuthResponse<T = any> {
   success: boolean;
   message: string;
   data?: T;
-}
-
-export interface IUserResponse<T> {
-  success: boolean;
-  message: string;
-  data?: T;
-  meta?: {
-    limit: number;
-    count: number;
-    hasNextPage: boolean;
-    nextCursor: string | null;
-  };
 }
 
 export interface ITokenPair {
@@ -30,22 +19,28 @@ export interface ITokenService {
 }
 
 export interface IUserService {
-  findByEmail(email: string): Promise<User | null>;
-  findById(id: string): Promise<User | null>;
+  findByEmail(
+    email: string,
+    selectQuery?: Prisma.UserSelect,
+  ): Promise<Partial<User> | null>;
+  findById(
+    id: string,
+    selectQuery?: Prisma.UserSelect,
+  ): Promise<Partial<User> | null>;
   findAllUsers(
     limit: number,
     cursor?: string,
     search?: string,
-  ): Promise<IUserResponse<User[]>>;
-  createUser(data: any): Promise<User>;
-  updateUser(id: string, data: any): Promise<User>;
-  upsertUser(email: string, data: any): Promise<User>;
+  ): Promise<IApiResponse<Partial<User>[]>>;
+  createUser(data: any): Promise<Partial<User>>;
+  updateUser(id: string, data: any): Promise<Partial<User>>;
+  upsertUser(email: string, data: any): Promise<Partial<User>>;
 }
 
 export interface IAuthService {
   loginOrCreateUser(data: any): Promise<IAuthResponse<ITokenPair>>;
   refreshTokens(refreshToken: string): Promise<IAuthResponse<ITokenPair>>;
-  getCurrentUser(userId: string): Promise<IAuthResponse<User>>;
+  getCurrentUser(userId: string): Promise<IAuthResponse<Partial<User>>>;
   logout(userId: string): Promise<IAuthResponse>;
 }
 

@@ -228,6 +228,11 @@ export class ShortnerService implements IShortnerService {
     referer?: string,
     userId?: string,
   ): Promise<string> {
+    const cachedUrl = await this.cacheManager.get<string>(`url:${slug}`);
+    if (cachedUrl) {
+      return cachedUrl;
+    }
+
     const data = await this.findBySlugMinimal(slug);
 
     if (!data.data) {

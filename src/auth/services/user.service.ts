@@ -1,9 +1,10 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma, User } from 'generated/prisma';
+import { IApiResponse } from 'src/interfaces';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { GoogleLoginDto } from '../dto/google-login.dto';
 import { UpdateUserDto } from '../dto/update-user.dto';
-import { IUserResponse, IUserService } from '../interfaces/auth.interface';
+import { IUserService } from '../interfaces/auth.interface';
 
 @Injectable()
 export class UserService implements IUserService {
@@ -11,10 +12,14 @@ export class UserService implements IUserService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  async findByEmail(email: string): Promise<User | null> {
+  async findByEmail(
+    email: string,
+    selectQuery: Prisma.UserSelect,
+  ): Promise<User | null> {
     try {
       return await this.prisma.user.findUnique({
         where: { email, isActive: true },
+        select: selectQuery,
       });
     } catch (error) {
       this.logger.error('Failed to find user by email', error);
@@ -22,10 +27,25 @@ export class UserService implements IUserService {
     }
   }
 
-  async findById(id: string): Promise<User | null> {
+  async findById(
+    id: string,
+    selectQuery?: Prisma.UserSelect,
+  ): Promise<Partial<User> | null> {
     try {
       return await this.prisma.user.findUnique({
         where: { id, isActive: true },
+        select: {
+          id: true,
+          password: false,
+          email: true,
+          name: true,
+          role: true,
+          isActive: true,
+          profilePicture: true,
+          createdAt: true,
+          updatedAt: true,
+          ...selectQuery,
+        },
       });
     } catch (error) {
       this.logger.error('Failed to find user by ID', error);
@@ -72,6 +92,7 @@ export class UserService implements IUserService {
           name: data.name,
           profilePicture: data.profilePicture,
         },
+
         create: data,
       });
     } catch (error) {
@@ -97,12 +118,23 @@ export class UserService implements IUserService {
     limit: number,
     cursor?: string,
     search?: string,
-  ): Promise<IUserResponse<User[]>> {
+  ): Promise<IApiResponse<User[]>> {
     try {
       const queryOptions: Prisma.UserFindManyArgs = {
         take: limit,
         orderBy: {
           createdAt: 'desc',
+        },
+        select: {
+          id: true,
+          password: false,
+          email: true,
+          name: true,
+          role: true,
+          isActive: true,
+          profilePicture: true,
+          createdAt: true,
+          updatedAt: true,
         },
       };
       if (cursor) {

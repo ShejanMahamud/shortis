@@ -4,9 +4,9 @@ import { JwtService } from '@nestjs/jwt';
 import { User } from 'generated/prisma';
 import { InvalidTokenException } from '../exceptions';
 import {
-    IJwtPayload,
-    ITokenPair,
-    ITokenService,
+  IJwtPayload,
+  ITokenPair,
+  ITokenService,
 } from '../interfaces/auth.interface';
 
 @Injectable()
@@ -27,11 +27,11 @@ export class TokenService implements ITokenService {
     this.refreshTokenExpiresIn = this.getEnvVar('REFRESH_TOKEN_EXPIRES_IN');
   }
 
-  generateTokens(user: User): ITokenPair {
+  generateTokens(user: Partial<User>): ITokenPair {
     try {
       const payload: IJwtPayload = {
-        sub: user.id,
-        email: user.email,
+        sub: user.id!,
+        email: user.email!,
         role: user.role as string,
       };
 

@@ -1,6 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
+import Redis from 'ioredis';
 import { IApiResponse } from 'src/interfaces';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { REDIS_CLIENT } from 'src/queue/queue.module';
 import {
   ClickData,
   ClickEntity,
@@ -10,7 +12,10 @@ import {
 
 @Injectable()
 export class AnalyticsService implements IAnalyticsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(REDIS_CLIENT) private readonly redisClient: Redis,
+  ) {}
 
   private async getUrlClicks(
     urlId: string,
@@ -172,16 +177,45 @@ export class AnalyticsService implements IAnalyticsService {
       os: this.getOSFromUserAgent(userAgent),
     };
 
-    await this.createClick(clickData);
+    await this.redisClient.sadd('activeUrls', urlId);
 
-    // Check if this is a unique click (based on IP address)
-    const isUnique = await this.isUniqueClick(urlId, ipAddress);
+    // 1. Store full click data in Redis list for later processing
+    await this.redisClient.rpush(`clicks:${urlId}`, JSON.stringify(clickData));
 
-    // Update analytics
-    await this.createOrUpdateAnalytics(urlId, new Date(), isUnique);
+    // 3. Increment unique clicks based on IP
+    if (ipAddress) {
+      const ipKey = `unique:${urlId}:${ipAddress}`;
+      const isNew = await this.redisClient.set(ipKey, 1, 'EX', 86400, 'NX'); // 1 day expiry
+      if (isNew) {
+        await this.redisClient.incr(`uniqueCount:${urlId}`);
+      }
+    }
+  }
 
-    // Increment URL click count
-    await this.incrementClickCount(urlId);
+  async flushClicksToDB(urlId: string) {
+    // 1. Read all click events
+    const clicks = await this.redisClient.lrange(`clicks:${urlId}`, 0, -1);
+    if (!clicks.length) return;
+
+    // 2. Clear Redis list
+    await this.redisClient.del(`clicks:${urlId}`);
+
+    // 3. Parse & insert in bulk
+    const clickData = clicks.map((c) => JSON.parse(c) as ClickData);
+    await this.prisma.click.createMany({ data: clickData });
+
+    // 4. Update counters
+    const unique = await this.redisClient.get(`uniqueCount:${urlId}`);
+
+    await this.prisma.url.update({
+      where: { id: urlId },
+      data: {
+        totalClicks: Number(unique || 0),
+      },
+    });
+
+    // 5. Reset counters after flush
+    await this.redisClient.del(`clickCount:${urlId}`, `uniqueCount:${urlId}`);
   }
 
   private async isUniqueClick(

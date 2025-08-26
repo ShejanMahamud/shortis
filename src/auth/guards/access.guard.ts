@@ -1,13 +1,13 @@
-import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { ExecutionContext, Inject, Injectable } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import type { Cache } from 'cache-manager';
 import type { Request } from 'express';
+import Redis from 'ioredis';
+import { REDIS_CLIENT } from 'src/queue/queue.module';
 import { IJwtPayload } from '../interfaces';
 
 @Injectable()
 export class AccessAuthGuard extends AuthGuard('access') {
-  constructor(@Inject(CACHE_MANAGER) private cacheManager: Cache) {
+  constructor(@Inject(REDIS_CLIENT) private redisClient: Redis) {
     super();
   }
 
@@ -19,7 +19,7 @@ export class AccessAuthGuard extends AuthGuard('access') {
     const user = request.user as IJwtPayload;
     if (!user) return false;
 
-    const token = await this.cacheManager.get(user.sub);
+    const token = await this.redisClient.get(`access:${user.sub}`);
     return !!token;
   }
 }

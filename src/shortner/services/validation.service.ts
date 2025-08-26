@@ -1,7 +1,7 @@
-import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import type { Cache } from 'cache-manager';
+import Redis from 'ioredis';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { REDIS_CLIENT } from 'src/queue/queue.module';
 import { Util } from 'src/utils/util';
 import {
   ClickLimitExceededException,
@@ -19,7 +19,7 @@ export class ValidationService implements IValidationService {
   private readonly SLUG_CACHE_TTL = 30000;
   constructor(
     private readonly prisma: PrismaService,
-    @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
+    @Inject(REDIS_CLIENT) private readonly redisClient: Redis,
   ) {}
 
   generateSlug(length: number = 6): string {
@@ -59,16 +59,22 @@ export class ValidationService implements IValidationService {
 
   async checkSlugExists(slug: string): Promise<boolean> {
     // Check cache first
-    const cached = await this.cacheManager.get<boolean>(`slug:${slug}`);
-    if (cached) {
-      return cached;
+    const cacheKey = `slug:${slug}`;
+    const cached = await this.redisClient.get(cacheKey);
+    if (cached !== null) {
+      return cached === 'true';
     }
+
     const url = await this.prisma.url.findUnique({
       where: { slug },
       select: { id: true },
     });
     const exists = !!url;
-    await this.cacheManager.set(`slug:${slug}`, exists, this.SLUG_CACHE_TTL);
+    await this.redisClient.setex(
+      cacheKey,
+      this.SLUG_CACHE_TTL / 1000,
+      exists ? 'true' : 'false',
+    );
     return exists;
   }
 

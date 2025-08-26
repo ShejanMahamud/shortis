@@ -1,15 +1,15 @@
-import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import {
   Inject,
   Injectable,
   InternalServerErrorException,
   Logger,
 } from '@nestjs/common';
-import type { Cache } from 'cache-manager';
 import { Prisma } from 'generated/prisma';
+import Redis from 'ioredis';
 import QRCode from 'qrcode';
 import { IApiResponse } from 'src/interfaces';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { REDIS_CLIENT } from 'src/queue/queue.module';
 import { UploadService } from 'src/upload/upload.service';
 import { Util } from 'src/utils/util';
 import { AccessUrlDto } from './dto/access-url.dto';
@@ -41,7 +41,7 @@ export class ShortnerService implements IShortnerService {
     private readonly analyticsService: AnalyticsService,
     private readonly prisma: PrismaService,
     private readonly upload: UploadService,
-    @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
+    @Inject(REDIS_CLIENT) private readonly redisClient: Redis,
   ) {}
 
   async create(
@@ -195,9 +195,9 @@ export class ShortnerService implements IShortnerService {
   }
 
   async findBySlugMinimal(slug: string): Promise<IApiResponse<IMinimalUrl>> {
-    const cachedKey = `url:${slug}`;
-    const cachedUrl = await this.cacheManager.get<IMinimalUrl>(cachedKey);
-    if (cachedUrl) {
+    const cachedUrlRaw = await this.redisClient.get(`url:${slug}`);
+    if (cachedUrlRaw) {
+      const cachedUrl = JSON.parse(cachedUrlRaw) as IMinimalUrl;
       return {
         success: true,
         message: 'Url fetched successfully from cache!',
@@ -232,7 +232,11 @@ export class ShortnerService implements IShortnerService {
       totalClicks: url.totalClicks ?? null,
     };
 
-    await this.cacheManager.set(cachedKey, minimalUrl, this.SLUG_CACHE_TTL);
+    await this.redisClient.setex(
+      `url:${slug}`,
+      this.SLUG_CACHE_TTL / 1000,
+      JSON.stringify(minimalUrl),
+    );
 
     return {
       success: true,
@@ -249,9 +253,9 @@ export class ShortnerService implements IShortnerService {
     referer?: string,
     userId?: string,
   ): Promise<string> {
-    const cachedUrl = await this.cacheManager.get<IMinimalUrl>(`url:${slug}`);
-    console.log('Cached URL:', cachedUrl);
-    if (cachedUrl) {
+    const cachedUrlRaw = await this.redisClient.get(`url:${slug}`);
+    if (cachedUrlRaw) {
+      const cachedUrl = JSON.parse(cachedUrlRaw) as IMinimalUrl;
       return cachedUrl.originalUrl;
     }
 

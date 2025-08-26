@@ -1,4 +1,3 @@
-import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import {
   Inject,
   Injectable,
@@ -6,9 +5,10 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
-import type { Cache } from 'cache-manager';
 import { Request } from 'express';
 import { User } from 'generated/prisma';
+import Redis from 'ioredis';
+import { REDIS_CLIENT } from 'src/queue/queue.module';
 import { Util } from 'src/utils/util';
 import { GoogleLoginDto } from './dto/google-login.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -32,7 +32,7 @@ export class AuthService implements IAuthService {
   constructor(
     private readonly userService: UserService,
     private readonly tokenService: TokenService,
-    @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
+    @Inject(REDIS_CLIENT) private readonly redisClient: Redis,
   ) {}
 
   async loginOrCreateUser(
@@ -49,7 +49,18 @@ export class AuthService implements IAuthService {
         refreshTokenExp: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7), // 7 days
       });
 
-      await this.cacheManager.set(user.id, tokens.accessToken, 300000);
+      await this.redisClient.set(
+        `access:${user.id}`,
+        tokens.accessToken,
+        'EX',
+        300,
+      );
+      await this.redisClient.set(
+        `refresh:${user.id}`,
+        tokens.refreshToken,
+        'EX',
+        604800,
+      );
 
       return {
         success: true,
@@ -156,7 +167,8 @@ export class AuthService implements IAuthService {
         refreshTokenExp: null,
       });
 
-      await this.cacheManager.del(userId);
+      await this.redisClient.del(`access:${userId}`);
+      await this.redisClient.del(`refresh:${userId}`);
 
       return {
         success: true,

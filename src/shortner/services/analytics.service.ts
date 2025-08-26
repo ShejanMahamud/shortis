@@ -185,37 +185,11 @@ export class AnalyticsService implements IAnalyticsService {
     // 3. Increment unique clicks based on IP
     if (ipAddress) {
       const ipKey = `unique:${urlId}:${ipAddress}`;
-      const isNew = await this.redisClient.set(ipKey, 1, 'EX', 86400, 'NX'); // 1 day expiry
+      const isNew = await this.redisClient.set(ipKey, 1, 'EX', 86400, 'NX');
       if (isNew) {
         await this.redisClient.incr(`uniqueCount:${urlId}`);
       }
     }
-  }
-
-  async flushClicksToDB(urlId: string) {
-    // 1. Read all click events
-    const clicks = await this.redisClient.lrange(`clicks:${urlId}`, 0, -1);
-    if (!clicks.length) return;
-
-    // 2. Clear Redis list
-    await this.redisClient.del(`clicks:${urlId}`);
-
-    // 3. Parse & insert in bulk
-    const clickData = clicks.map((c) => JSON.parse(c) as ClickData);
-    await this.prisma.click.createMany({ data: clickData });
-
-    // 4. Update counters
-    const unique = await this.redisClient.get(`uniqueCount:${urlId}`);
-
-    await this.prisma.url.update({
-      where: { id: urlId },
-      data: {
-        totalClicks: Number(unique || 0),
-      },
-    });
-
-    // 5. Reset counters after flush
-    await this.redisClient.del(`clickCount:${urlId}`, `uniqueCount:${urlId}`);
   }
 
   private async isUniqueClick(

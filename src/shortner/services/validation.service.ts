@@ -1,7 +1,8 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import Redis from 'ioredis';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { REDIS_CLIENT } from 'src/queue/queue.module';
+import { ISubscription } from 'src/subscription/interfaces';
 import { Util } from 'src/utils/util';
 import {
   ClickLimitExceededException,
@@ -20,7 +21,131 @@ export class ValidationService implements IValidationService {
   constructor(
     private readonly prisma: PrismaService,
     @Inject(REDIS_CLIENT) private readonly redisClient: Redis,
-  ) {}
+  ) { }
+
+  public async checkSubscriptionLimit(
+    userId: string,
+    featureKey: string,
+  ): Promise<{
+    used: number;
+    limit: number;
+    allowed: boolean;
+  }> {
+    const subscription = await this.checkActiveSubscription(userId);
+    if (!subscription) {
+      throw new NotFoundException('No active subscription found');
+    }
+    //get feature limit
+    const featureLimit = subscription.plan?.PlanFeature?.find(
+      (feature) => feature.key === featureKey,
+    );
+    if (!featureLimit) {
+      throw new NotFoundException(
+        `Feature ${featureKey} not available in this plan`,
+      );
+    }
+
+    const limit = parseInt(featureLimit.value, 10);
+
+    const redisKey = `feature_usage:${userId}:${subscription.id}:${featureKey}:${subscription.currentPeriodStart.toISOString()}:${subscription.currentPeriodEnd.toISOString()}`;
+
+    const cached = await this.redisClient.get(redisKey);
+
+    if (cached) {
+      const used = parseInt(cached, 10);
+      return {
+        used,
+        limit,
+        allowed: used < limit,
+      };
+    }
+
+    const usage = await this.prisma.featureUsage.findFirst({
+      where: {
+        subscriptionId: subscription.id,
+        userId: userId,
+        featureKey: featureLimit.key,
+        periodStart: subscription.currentPeriodStart,
+        periodEnd: subscription.currentPeriodEnd,
+      },
+    });
+    const used = usage ? usage.used : 0;
+
+    await this.redisClient.set(redisKey, used.toString(), 'EX', 60);
+
+    return {
+      used,
+      limit,
+      allowed: used < limit,
+    };
+  }
+
+  public async incrementFeatureUsage(userId: string, featureKey: string) {
+    const subscription = await this.checkActiveSubscription(userId);
+    if (!subscription) {
+      throw new NotFoundException('No subscription found');
+    }
+    await this.prisma.featureUsage.upsert({
+      where: {
+        userId_subscriptionId_featureKey_periodStart_periodEnd: {
+          featureKey,
+          userId,
+          periodStart: new Date(),
+          periodEnd: new Date(),
+          subscriptionId: subscription.id,
+        },
+      },
+      update: {
+        used: {
+          increment: 1,
+        },
+      },
+      create: {
+        featureKey,
+        userId,
+        periodStart: new Date(),
+        periodEnd: new Date(),
+        subscriptionId: subscription.id,
+      },
+    });
+  }
+
+  async checkActiveSubscription(userId: string): Promise<ISubscription> {
+    const redisKey = `active_subscription:${userId}`;
+    const cached = await this.redisClient.get(redisKey);
+    if (cached) {
+      return JSON.parse(cached) as ISubscription;
+    }
+    const subscription = await this.prisma.subscription.findFirst({
+      where: {
+        userId,
+        status: 'ACTIVE',
+        currentPeriodStart: {
+          gte: new Date(),
+        },
+      },
+      include: {
+        plan: {
+          include: {
+            PlanFeature: true,
+          },
+        },
+      },
+    });
+    if (!subscription) {
+      throw new NotFoundException('No active subscription found');
+    }
+    const ttlSeconds = Math.floor(
+      (subscription.currentPeriodEnd.getTime() - Date.now()) / 1000,
+    );
+    await this.redisClient.set(
+      redisKey,
+      JSON.stringify(subscription),
+      'EX',
+      ttlSeconds,
+    );
+    return subscription;
+  }
 
   generateSlug(length: number = 6): string {
     const characters =

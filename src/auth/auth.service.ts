@@ -5,6 +5,7 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Request } from 'express';
 import { User } from 'generated/prisma';
 import Redis from 'ioredis';
@@ -28,12 +29,12 @@ import { TokenService, UserService } from './services';
 @Injectable()
 export class AuthService implements IAuthService {
   private readonly logger = new Logger(AuthService.name);
-
   constructor(
     private readonly userService: UserService,
     private readonly tokenService: TokenService,
     @Inject(REDIS_CLIENT) private readonly redisClient: Redis,
-  ) {}
+    private readonly config: ConfigService,
+  ) { }
 
   async loginOrCreateUser(
     data: GoogleLoginDto,
@@ -53,7 +54,7 @@ export class AuthService implements IAuthService {
         `access:${user.id}`,
         tokens.accessToken,
         'EX',
-        300,
+        3600,
       );
       await this.redisClient.set(
         `refresh:${user.id}`,

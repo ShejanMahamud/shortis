@@ -7,6 +7,9 @@ import { PrismaModule } from './prisma/prisma.module';
 import { QueueModule } from './queue/queue.module';
 import { ShortnerModule } from './shortner/shortner.module';
 import { TaskModule } from './task/task.module';
+import { PlanModule } from './plan/plan.module';
+import { BkashModule } from './bkash/bkash.module';
+import { SubscriptionModule } from './subscription/subscription.module';
 
 @Module({
   imports: [
@@ -22,6 +25,9 @@ import { TaskModule } from './task/task.module';
     AuthModule,
     ShortnerModule,
     QueueModule,
+    PlanModule,
+    BkashModule,
+    SubscriptionModule,
   ],
   controllers: [AppController],
   providers: [],

@@ -1,14 +1,26 @@
 -- CreateEnum
-CREATE TYPE "public"."Role" AS ENUM ('USER', 'ADMIN', 'PREMIUM');
+CREATE TYPE "public"."PlanType" AS ENUM ('FREE', 'PAID');
 
 -- CreateEnum
-CREATE TYPE "public"."PlanInterval" AS ENUM ('MONTH', 'YEAR', 'WEEK', 'DAY');
+CREATE TYPE "public"."NotificationType" AS ENUM ('INFO', 'WARNING', 'ERROR');
 
 -- CreateEnum
-CREATE TYPE "public"."SubscriptionStatus" AS ENUM ('ACTIVE', 'INACTIVE', 'PAST_DUE', 'CANCELED', 'UNPAID', 'TRIALING', 'PAUSED');
+CREATE TYPE "public"."Role" AS ENUM ('USER', 'ADMIN');
+
+-- CreateEnum
+CREATE TYPE "public"."PlanInterval" AS ENUM ('MONTH', 'YEAR');
+
+-- CreateEnum
+CREATE TYPE "public"."SubscriptionStatus" AS ENUM ('ACTIVE', 'INACTIVE', 'PAST_DUE', 'CANCELED', 'UNPAID', 'PAUSED');
 
 -- CreateEnum
 CREATE TYPE "public"."PaymentStatus" AS ENUM ('PENDING', 'SUCCEEDED', 'FAILED', 'CANCELED', 'REFUNDED');
+
+-- CreateEnum
+CREATE TYPE "public"."Currency" AS ENUM ('BDT');
+
+-- CreateEnum
+CREATE TYPE "public"."PaymentMethod" AS ENUM ('BKASH');
 
 -- CreateTable
 CREATE TABLE "public"."users" (
@@ -17,14 +29,11 @@ CREATE TABLE "public"."users" (
     "name" TEXT NOT NULL,
     "role" "public"."Role" NOT NULL DEFAULT 'USER',
     "password" TEXT,
-    "accessToken" TEXT,
-    "accessTokenExp" TIMESTAMP(3),
     "refreshToken" TEXT,
     "refreshTokenExp" TIMESTAMP(3),
     "profilePicture" TEXT,
     "isActive" BOOLEAN NOT NULL DEFAULT true,
     "emailVerified" BOOLEAN NOT NULL DEFAULT false,
-    "stripeCustomerId" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -37,6 +46,7 @@ CREATE TABLE "public"."urls" (
     "originalUrl" TEXT NOT NULL,
     "slug" TEXT NOT NULL,
     "title" TEXT,
+    "qrCode" TEXT,
     "description" TEXT,
     "userId" TEXT,
     "isActive" BOOLEAN NOT NULL DEFAULT true,
@@ -86,13 +96,11 @@ CREATE TABLE "public"."analytics" (
 CREATE TABLE "public"."plans" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
-    "description" TEXT,
-    "stripePriceId" TEXT,
-    "stripeProductId" TEXT,
+    "description" TEXT NOT NULL,
+    "type" "public"."PlanType" NOT NULL DEFAULT 'FREE',
     "price" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "currency" TEXT NOT NULL DEFAULT 'usd',
+    "currency" "public"."Currency" NOT NULL DEFAULT 'BDT',
     "interval" "public"."PlanInterval" NOT NULL,
-    "features" JSONB NOT NULL,
     "isActive" BOOLEAN NOT NULL DEFAULT true,
     "sortOrder" INTEGER NOT NULL DEFAULT 0,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -102,19 +110,56 @@ CREATE TABLE "public"."plans" (
 );
 
 -- CreateTable
+CREATE TABLE "public"."plan_features" (
+    "id" TEXT NOT NULL,
+    "planId" TEXT NOT NULL,
+    "key" TEXT NOT NULL,
+    "value" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "plan_features_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "public"."usage_history" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "planId" TEXT NOT NULL,
+    "description" TEXT NOT NULL,
+    "usedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "usage_history_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "public"."feature_usage" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "subscriptionId" TEXT NOT NULL,
+    "featureKey" TEXT NOT NULL,
+    "used" INTEGER NOT NULL DEFAULT 0,
+    "periodStart" TIMESTAMP(3) NOT NULL,
+    "periodEnd" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "feature_usage_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "public"."subscriptions" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "planId" TEXT NOT NULL,
-    "stripeSubscriptionId" TEXT,
-    "stripeCustomerId" TEXT,
     "status" "public"."SubscriptionStatus" NOT NULL DEFAULT 'INACTIVE',
-    "currentPeriodStart" TIMESTAMP(3),
-    "currentPeriodEnd" TIMESTAMP(3),
+    "paymentMethod" "public"."PaymentMethod" NOT NULL DEFAULT 'BKASH',
+    "currentPeriodStart" TIMESTAMP(3) NOT NULL,
+    "currentPeriodEnd" TIMESTAMP(3) NOT NULL,
     "cancelAtPeriodEnd" BOOLEAN NOT NULL DEFAULT false,
     "canceledAt" TIMESTAMP(3),
-    "trialStart" TIMESTAMP(3),
-    "trialEnd" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -126,13 +171,12 @@ CREATE TABLE "public"."payment_history" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "subscriptionId" TEXT,
-    "stripePaymentId" TEXT,
-    "stripeInvoiceId" TEXT,
+    "bkashPaymentId" TEXT,
     "amount" DOUBLE PRECISION NOT NULL,
-    "currency" TEXT NOT NULL DEFAULT 'usd',
+    "currency" "public"."Currency" NOT NULL DEFAULT 'BDT',
     "status" "public"."PaymentStatus" NOT NULL DEFAULT 'PENDING',
     "description" TEXT,
-    "paymentMethod" TEXT,
+    "paymentMethod" "public"."PaymentMethod" NOT NULL DEFAULT 'BKASH',
     "failureReason" TEXT,
     "paidAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -142,39 +186,29 @@ CREATE TABLE "public"."payment_history" (
 );
 
 -- CreateTable
-CREATE TABLE "public"."webhook_events" (
+CREATE TABLE "public"."notifications" (
     "id" TEXT NOT NULL,
-    "stripeEventId" TEXT NOT NULL,
-    "eventType" TEXT NOT NULL,
-    "processed" BOOLEAN NOT NULL DEFAULT false,
-    "processingError" TEXT,
-    "data" JSONB NOT NULL,
+    "userId" TEXT NOT NULL,
+    "type" "public"."NotificationType" NOT NULL DEFAULT 'INFO',
+    "message" TEXT NOT NULL,
+    "read" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "processedAt" TIMESTAMP(3),
+    "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "webhook_events_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "notifications_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex
 CREATE UNIQUE INDEX "users_email_key" ON "public"."users"("email");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "users_accessToken_key" ON "public"."users"("accessToken");
-
--- CreateIndex
 CREATE UNIQUE INDEX "users_refreshToken_key" ON "public"."users"("refreshToken");
-
--- CreateIndex
-CREATE UNIQUE INDEX "users_stripeCustomerId_key" ON "public"."users"("stripeCustomerId");
 
 -- CreateIndex
 CREATE INDEX "users_email_idx" ON "public"."users"("email");
 
 -- CreateIndex
 CREATE INDEX "users_isActive_idx" ON "public"."users"("isActive");
-
--- CreateIndex
-CREATE INDEX "users_stripeCustomerId_idx" ON "public"."users"("stripeCustomerId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "urls_slug_key" ON "public"."urls"("slug");
@@ -219,19 +253,37 @@ CREATE UNIQUE INDEX "analytics_urlId_date_key" ON "public"."analytics"("urlId", 
 CREATE UNIQUE INDEX "plans_name_key" ON "public"."plans"("name");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "plans_stripePriceId_key" ON "public"."plans"("stripePriceId");
-
--- CreateIndex
-CREATE UNIQUE INDEX "plans_stripeProductId_key" ON "public"."plans"("stripeProductId");
-
--- CreateIndex
 CREATE INDEX "plans_isActive_idx" ON "public"."plans"("isActive");
 
 -- CreateIndex
-CREATE INDEX "plans_stripePriceId_idx" ON "public"."plans"("stripePriceId");
+CREATE INDEX "plan_features_planId_idx" ON "public"."plan_features"("planId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "subscriptions_stripeSubscriptionId_key" ON "public"."subscriptions"("stripeSubscriptionId");
+CREATE INDEX "plan_features_key_idx" ON "public"."plan_features"("key");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "plan_features_planId_key_key" ON "public"."plan_features"("planId", "key");
+
+-- CreateIndex
+CREATE INDEX "usage_history_userId_idx" ON "public"."usage_history"("userId");
+
+-- CreateIndex
+CREATE INDEX "usage_history_planId_idx" ON "public"."usage_history"("planId");
+
+-- CreateIndex
+CREATE INDEX "feature_usage_userId_idx" ON "public"."feature_usage"("userId");
+
+-- CreateIndex
+CREATE INDEX "feature_usage_subscriptionId_idx" ON "public"."feature_usage"("subscriptionId");
+
+-- CreateIndex
+CREATE INDEX "feature_usage_featureKey_idx" ON "public"."feature_usage"("featureKey");
+
+-- CreateIndex
+CREATE INDEX "feature_usage_periodEnd_idx" ON "public"."feature_usage"("periodEnd");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "feature_usage_userId_subscriptionId_featureKey_periodStart__key" ON "public"."feature_usage"("userId", "subscriptionId", "featureKey", "periodStart", "periodEnd");
 
 -- CreateIndex
 CREATE INDEX "subscriptions_userId_idx" ON "public"."subscriptions"("userId");
@@ -243,16 +295,10 @@ CREATE INDEX "subscriptions_planId_idx" ON "public"."subscriptions"("planId");
 CREATE INDEX "subscriptions_status_idx" ON "public"."subscriptions"("status");
 
 -- CreateIndex
-CREATE INDEX "subscriptions_stripeSubscriptionId_idx" ON "public"."subscriptions"("stripeSubscriptionId");
-
--- CreateIndex
 CREATE INDEX "subscriptions_currentPeriodEnd_idx" ON "public"."subscriptions"("currentPeriodEnd");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "payment_history_stripePaymentId_key" ON "public"."payment_history"("stripePaymentId");
-
--- CreateIndex
-CREATE UNIQUE INDEX "payment_history_stripeInvoiceId_key" ON "public"."payment_history"("stripeInvoiceId");
+CREATE UNIQUE INDEX "payment_history_bkashPaymentId_key" ON "public"."payment_history"("bkashPaymentId");
 
 -- CreateIndex
 CREATE INDEX "payment_history_userId_idx" ON "public"."payment_history"("userId");
@@ -264,25 +310,13 @@ CREATE INDEX "payment_history_subscriptionId_idx" ON "public"."payment_history"(
 CREATE INDEX "payment_history_status_idx" ON "public"."payment_history"("status");
 
 -- CreateIndex
-CREATE INDEX "payment_history_stripePaymentId_idx" ON "public"."payment_history"("stripePaymentId");
+CREATE INDEX "payment_history_bkashPaymentId_idx" ON "public"."payment_history"("bkashPaymentId");
 
 -- CreateIndex
 CREATE INDEX "payment_history_paidAt_idx" ON "public"."payment_history"("paidAt");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "webhook_events_stripeEventId_key" ON "public"."webhook_events"("stripeEventId");
-
--- CreateIndex
-CREATE INDEX "webhook_events_stripeEventId_idx" ON "public"."webhook_events"("stripeEventId");
-
--- CreateIndex
-CREATE INDEX "webhook_events_processed_idx" ON "public"."webhook_events"("processed");
-
--- CreateIndex
-CREATE INDEX "webhook_events_eventType_idx" ON "public"."webhook_events"("eventType");
-
--- CreateIndex
-CREATE INDEX "webhook_events_createdAt_idx" ON "public"."webhook_events"("createdAt");
+CREATE INDEX "notifications_userId_idx" ON "public"."notifications"("userId");
 
 -- AddForeignKey
 ALTER TABLE "public"."urls" ADD CONSTRAINT "urls_userId_fkey" FOREIGN KEY ("userId") REFERENCES "public"."users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -297,6 +331,21 @@ ALTER TABLE "public"."clicks" ADD CONSTRAINT "clicks_userId_fkey" FOREIGN KEY ("
 ALTER TABLE "public"."analytics" ADD CONSTRAINT "analytics_urlId_fkey" FOREIGN KEY ("urlId") REFERENCES "public"."urls"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "public"."plan_features" ADD CONSTRAINT "plan_features_planId_fkey" FOREIGN KEY ("planId") REFERENCES "public"."plans"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."usage_history" ADD CONSTRAINT "usage_history_userId_fkey" FOREIGN KEY ("userId") REFERENCES "public"."users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."usage_history" ADD CONSTRAINT "usage_history_planId_fkey" FOREIGN KEY ("planId") REFERENCES "public"."plans"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."feature_usage" ADD CONSTRAINT "feature_usage_userId_fkey" FOREIGN KEY ("userId") REFERENCES "public"."users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."feature_usage" ADD CONSTRAINT "feature_usage_subscriptionId_fkey" FOREIGN KEY ("subscriptionId") REFERENCES "public"."subscriptions"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "public"."subscriptions" ADD CONSTRAINT "subscriptions_userId_fkey" FOREIGN KEY ("userId") REFERENCES "public"."users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -307,3 +356,6 @@ ALTER TABLE "public"."payment_history" ADD CONSTRAINT "payment_history_userId_fk
 
 -- AddForeignKey
 ALTER TABLE "public"."payment_history" ADD CONSTRAINT "payment_history_subscriptionId_fkey" FOREIGN KEY ("subscriptionId") REFERENCES "public"."subscriptions"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."notifications" ADD CONSTRAINT "notifications_userId_fkey" FOREIGN KEY ("userId") REFERENCES "public"."users"("id") ON DELETE CASCADE ON UPDATE CASCADE;

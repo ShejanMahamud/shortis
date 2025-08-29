@@ -8,8 +8,6 @@ export interface ISubscription {
     id: string;
     userId: string;
     planId: string;
-    stripeSubscriptionId: string | null;
-    stripeCustomerId: string | null;
     status: SubscriptionStatus;
     paymentMethod: PaymentMethod;
     currentPeriodStart: Date;

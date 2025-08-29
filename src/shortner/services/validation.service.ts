@@ -133,7 +133,6 @@ export class ValidationService implements IValidationService {
     });
 
     const used = usage ? usage.used : 0;
-    console.log('Used:', used);
 
     // Cache the usage with TTL
     await this.redisClient.set(
@@ -162,7 +161,6 @@ export class ValidationService implements IValidationService {
 
     // Increment in Redis
     const used = await this.redisClient.incr(redisKey);
-    console.log('Incremented usage to:', used);
 
     // Set expiry aligned with billing cycle
     const ttlSeconds = this.calculateTtlSeconds(subscription.currentPeriodEnd);
@@ -187,11 +185,8 @@ export class ValidationService implements IValidationService {
     const cachedSubscription =
       await this.getCachedData<ISubscription>(redisKey);
     if (cachedSubscription) {
-      console.log('Cached Subscription:', cachedSubscription);
       return cachedSubscription;
     }
-
-    console.log(userId);
 
     // Fetch from database
     const subscription = await this.prisma.subscription.findFirst({
@@ -209,8 +204,6 @@ export class ValidationService implements IValidationService {
         },
       },
     });
-
-    console.log('DB Subscription:', subscription);
 
     if (!subscription) {
       throw new NotFoundException('No active subscription found');

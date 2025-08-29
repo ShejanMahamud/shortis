@@ -11,7 +11,7 @@ import { IPlan, IPlanService } from './interfaces';
 
 @Injectable()
 export class PlanService implements IPlanService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
   public async createPlan(data: CreatePlanDto): Promise<IApiResponse<IPlan>> {
     const existingPlan = await this.prisma.plan.findUnique({
       where: { name: data.name },
@@ -76,5 +76,17 @@ export class PlanService implements IPlanService {
       success: true,
       message: 'Plan deleted successfully',
     };
+  }
+
+  public async getFreePlan(): Promise<IPlan | null> {
+    return this.prisma.plan.findFirst({
+      where: {
+        type: 'FREE',
+        isActive: true,
+      },
+      orderBy: {
+        createdAt: 'asc', // Get the first free plan created
+      },
+    });
   }
 }

@@ -71,24 +71,38 @@ export class BkashService implements IBkashService {
         new Date().setMonth(currentPeriodStart.getMonth() + 1),
       );
       if (res.transactionStatus === 'Completed') {
-        const data = {
-          planId: planId,
-          userId: userId,
-          currentPeriodStart,
-          currentPeriodEnd,
-          paymentMethod: 'BKASH' as PaymentMethod,
-        };
-        const subscription = await this.subscription.createSubscription(data);
-        console.log(
-          'Payment successful and subscription created.',
-          subscription,
-        );
+        // Try to upgrade the subscription first, fallback to create if no existing subscription
+        let subscription: any;
+        try {
+          subscription = await this.subscription.upgradeSubscription(
+            userId,
+            planId,
+            'BKASH',
+          );
+        } catch (error) {
+          // If upgrade fails (e.g., no existing subscription), create new subscription
+          if (
+            error instanceof Error &&
+            error.message.includes('No active subscription found')
+          ) {
+            const data = {
+              planId: planId,
+              userId: userId,
+              currentPeriodStart,
+              currentPeriodEnd,
+              paymentMethod: 'BKASH' as PaymentMethod,
+            };
+            subscription = await this.subscription.createSubscription(data);
+          } else {
+            throw error;
+          }
+        }
 
         const paymentHistory = await this.prisma.paymentHistory.create({
           data: {
             userId: userId,
             paymentMethod: 'BKASH',
-            subscriptionId: subscription.data?.id,
+            subscriptionId: subscription?.data?.id ?? null,
             amount: parseFloat(res.amount),
             currency: 'BDT',
             bkashPaymentId: paymentID,
@@ -97,14 +111,37 @@ export class BkashService implements IBkashService {
             paidAt: new Date(),
           },
         });
-        console.log('Payment history created successfully.', paymentHistory);
       }
     }
     if (status === 'failure') {
-      console.log('Payment failed or cancelled by user.', paymentID);
+      // Create payment history for failed payment
+      await this.prisma.paymentHistory.create({
+        data: {
+          userId: userId,
+          paymentMethod: 'BKASH',
+          amount: 0, // Amount unknown for failed payment
+          currency: 'BDT',
+          bkashPaymentId: paymentID,
+          description: 'BKASH payment failed',
+          status: 'FAILED',
+          paidAt: new Date(),
+        },
+      });
     }
     if (status === 'cancel') {
-      console.log('Payment cancelled by user.', paymentID);
+      // Create payment history for cancelled payment
+      await this.prisma.paymentHistory.create({
+        data: {
+          userId: userId,
+          paymentMethod: 'BKASH',
+          amount: 0, // Amount unknown for cancelled payment
+          currency: 'BDT',
+          bkashPaymentId: paymentID,
+          description: 'BKASH payment cancelled by user',
+          status: 'CANCELED',
+          paidAt: new Date(),
+        },
+      });
     }
     return {
       success: true,

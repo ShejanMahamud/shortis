@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
+import { SubscriptionModule } from 'src/subscription/subscription.module';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { AccessAuthGuard, RefreshAuthGuard } from './guards';
@@ -8,7 +9,7 @@ import { AccessStrategy, GoogleStrategy, RefreshStrategy } from './strategies';
 import { UserManagementController } from './user-management.controller';
 
 @Module({
-  imports: [JwtModule.register({})],
+  imports: [JwtModule.register({}), SubscriptionModule],
   controllers: [AuthController, UserManagementController],
   providers: [
     // Core Services
@@ -33,4 +34,4 @@ import { UserManagementController } from './user-management.controller';
     RefreshAuthGuard,
   ],
 })
-export class AuthModule {}
+export class AuthModule { }

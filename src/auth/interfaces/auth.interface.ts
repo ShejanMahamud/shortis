@@ -12,6 +12,13 @@ export interface ITokenPair {
   refreshToken: string;
 }
 
+export interface ISessionMetadata {
+  userId: string;
+  createdAt: string;
+  lastActivity: string;
+  isActive: boolean;
+}
+
 export interface ITokenService {
   generateTokens(user: User): ITokenPair;
   verifyAccessToken(token: string): Promise<IJwtPayload>;
@@ -42,6 +49,8 @@ export interface IAuthService {
   refreshTokens(refreshToken: string): Promise<IAuthResponse<ITokenPair>>;
   getCurrentUser(userId: string): Promise<IAuthResponse<Partial<User>>>;
   logout(userId: string): Promise<IAuthResponse>;
+  getActiveSessions(): Promise<string[]>;
+  forceLogout(userId: string): Promise<IAuthResponse>;
 }
 
 export interface IJwtPayload {

@@ -8,8 +8,6 @@ export interface IPlan {
   id: string;
   name: string;
   description: string;
-  stripePriceId: string | null;
-  stripeProductId: string | null;
   price: number;
   currency: string;
   interval: string;

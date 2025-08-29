@@ -2,8 +2,7 @@ import {
     IsDate,
     IsEnum,
     IsNotEmpty,
-    IsOptional,
-    IsString,
+    IsString
 } from 'class-validator';
 import { PaymentMethod } from 'generated/prisma';
 
@@ -23,14 +22,6 @@ export class CreateSubscriptionDto {
     @IsDate()
     @IsNotEmpty()
     currentPeriodEnd: Date;
-
-    @IsString()
-    @IsOptional()
-    stripeSubscriptionId?: string;
-
-    @IsString()
-    @IsOptional()
-    stripeCustomerId?: string;
 
     @IsEnum(PaymentMethod)
     @IsNotEmpty()

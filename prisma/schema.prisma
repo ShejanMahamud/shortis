@@ -20,7 +20,6 @@ model User {
   profilePicture   String?
   isActive         Boolean   @default(true)
   emailVerified    Boolean   @default(false)
-  stripeCustomerId String?   @unique
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -34,7 +33,6 @@ model User {
 
   @@index([email])
   @@index([isActive])
-  @@index([stripeCustomerId])
   @@map("users")
 }
 
@@ -112,10 +110,9 @@ model Plan {
   id              String       @id @default(uuid())
   name            String       @unique
   description     String
-  stripePriceId   String?      @unique
-  stripeProductId String?      @unique
+  type            PlanType     @default(FREE)
   price           Float        @default(0)
-  currency        Currency     @default(USD)
+  currency        Currency     @default(BDT)
   interval        PlanInterval
   isActive        Boolean      @default(true)
   sortOrder       Int          @default(0)
@@ -127,7 +124,6 @@ model Plan {
   UsageHistory  UsageHistory[]
 
   @@index([isActive])
-  @@index([stripePriceId])
   @@map("plans")
 }
 
@@ -189,10 +185,8 @@ model Subscription {
   id                   String             @id @default(uuid())
   userId               String
   planId               String
-  stripeSubscriptionId String?            @unique
-  stripeCustomerId     String?
   status               SubscriptionStatus @default(INACTIVE)
-  paymentMethod        PaymentMethod      @default(STRIPE)
+  paymentMethod        PaymentMethod      @default(BKASH)
   currentPeriodStart   DateTime
   currentPeriodEnd     DateTime
   cancelAtPeriodEnd    Boolean            @default(false)
@@ -208,7 +202,6 @@ model Subscription {
   @@index([userId])
   @@index([planId])
   @@index([status])
-  @@index([stripeSubscriptionId])
   @@index([currentPeriodEnd])
   @@map("subscriptions")
 }
@@ -217,14 +210,12 @@ model PaymentHistory {
   id              String        @id @default(uuid())
   userId          String
   subscriptionId  String?
-  stripePaymentId String?       @unique
-  stripeInvoiceId String?       @unique
   bkashPaymentId  String?       @unique
   amount          Float
-  currency        Currency      @default(USD)
+  currency        Currency      @default(BDT)
   status          PaymentStatus @default(PENDING)
   description     String?
-  paymentMethod   PaymentMethod @default(STRIPE)
+  paymentMethod   PaymentMethod @default(BKASH)
   failureReason   String?
   paidAt          DateTime?
   createdAt       DateTime      @default(now())
@@ -236,27 +227,9 @@ model PaymentHistory {
   @@index([userId])
   @@index([subscriptionId])
   @@index([status])
-  @@index([stripePaymentId])
+  @@index([bkashPaymentId])
   @@index([paidAt])
   @@map("payment_history")
-}
-
-model WebhookEvent {
-  id              String        @id @default(uuid())
-  stripeEventId   String        @unique
-  eventType       String
-  provider        PaymentMethod @default(STRIPE)
-  processed       Boolean       @default(false)
-  processingError String?
-  data            Json
-  createdAt       DateTime      @default(now())
-  processedAt     DateTime?
-
-  @@index([stripeEventId])
-  @@index([processed])
-  @@index([eventType])
-  @@index([createdAt])
-  @@map("webhook_events")
 }
 
 model Notification {
@@ -274,6 +247,11 @@ model Notification {
   @@map("notifications")
 }
 
+enum PlanType {
+  FREE
+  PAID
+}
+
 enum NotificationType {
   INFO
   WARNING
@@ -288,8 +266,6 @@ enum Role {
 enum PlanInterval {
   MONTH
   YEAR
-  WEEK
-  DAY
 }
 
 enum SubscriptionStatus {
@@ -310,11 +286,9 @@ enum PaymentStatus {
 }
 
 enum Currency {
-  USD
   BDT
 }
 
 enum PaymentMethod {
-  STRIPE
   BKASH
 }

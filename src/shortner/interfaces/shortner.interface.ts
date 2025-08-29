@@ -104,10 +104,13 @@ export interface IMinimalUrl {
   originalUrl: string;
   slug: string;
   password?: string | null;
-  isActive: boolean | null;
+  isActive: boolean;
   expiresAt?: Date | null;
   clickLimit?: number | null;
   totalClicks: number;
+  clickCount?: number; // Add missing field
+  userId?: string | null; // Add missing field
+  hasPassword?: boolean; // Add missing field
 }
 
 export interface IShortnerService {
@@ -167,6 +170,18 @@ export interface IValidationService {
   validateUrlAccess(url: UrlEntity, password?: string): Promise<void>;
   generateUniqueSlug(customSlug?: string): Promise<string>;
   checkSlugExists(slug: string): Promise<boolean>;
+}
+
+export interface IUrlValidationService {
+  validateUrlCreation(userId: string): Promise<boolean>;
+  consumeUrlCreation(userId: string): Promise<void>;
+  validateUrlAccess(
+    slug: string,
+    password?: string,
+    userIp?: string,
+  ): Promise<IMinimalUrl>;
+  validateUrlUpdate(userId: string, urlId: string): Promise<boolean>;
+  clearUrlCache(slug: string): Promise<void>;
 }
 
 export interface IAnalyticsService {

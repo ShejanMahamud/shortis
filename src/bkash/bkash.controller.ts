@@ -61,4 +61,10 @@ export class BkashController {
   ) {
     return this.bkashService.refundPaymentStatus(trxId, paymentId);
   }
+
+  @Get('query')
+  @UseGuards(AccessAuthGuard)
+  queryPaymentStatus(@Query('paymentID') paymentID: string) {
+    return this.bkashService.queryPaymentStatus(paymentID);
+  }
 }

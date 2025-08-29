@@ -4,6 +4,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Param,
   Patch,
   Post,
   Req,
@@ -21,14 +22,15 @@ import {
 import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
+import { Role, Roles } from './decorators';
 import { GoogleLoginDto, RefreshTokenDto, UpdateUserDto } from './dto';
-import { RefreshAuthGuard } from './guards';
+import { RefreshAuthGuard, RolesGuard } from './guards';
 import { AccessAuthGuard } from './guards/access.guard';
 
 @ApiTags('Authentication')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authService: AuthService) { }
 
   @Get('google')
   @UseGuards(AuthGuard('google'))
@@ -255,5 +257,78 @@ export class AuthController {
   ) {
     const user = req.user as { sub: string };
     return this.authService.updateUser(user.sub, updateUserDto);
+  }
+
+  @UseGuards(AccessAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @Get('sessions/active')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get all active sessions (Admin only)',
+    description:
+      'Retrieve a list of all currently active user sessions. This endpoint requires admin privileges.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Active sessions retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        message: { type: 'string', example: 'Active sessions retrieved' },
+        data: {
+          type: 'array',
+          items: {
+            type: 'string',
+            example: 'clm1234567890',
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - invalid or expired token',
+  })
+  public async getActiveSessions() {
+    const sessions = await this.authService.getActiveSessions();
+    return {
+      success: true,
+      message: 'Active sessions retrieved successfully',
+      data: sessions,
+    };
+  }
+
+  @UseGuards(AccessAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @Post('sessions/force-logout/:userId')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Force logout a specific user (Admin only)',
+    description:
+      'Forcefully logout a user by clearing their session and refresh tokens. This endpoint requires admin privileges.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'User forcefully logged out',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        message: { type: 'string', example: 'User forcefully logged out' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - invalid or expired token',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'User not found',
+  })
+  public async forceLogout(@Param('userId') userId: string) {
+    return this.authService.forceLogout(userId);
   }
 }

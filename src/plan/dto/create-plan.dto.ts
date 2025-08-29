@@ -3,8 +3,7 @@ import {
   IsEnum,
   IsNotEmpty,
   IsNumber,
-  IsOptional,
-  IsString,
+  IsString
 } from 'class-validator';
 import { Currency, PlanInterval } from 'generated/prisma';
 
@@ -16,14 +15,6 @@ export class CreatePlanDto {
   @IsString()
   @IsNotEmpty()
   description: string;
-
-  @IsString()
-  @IsOptional()
-  stripePriceId?: string | null;
-
-  @IsString()
-  @IsOptional()
-  stripeProductId?: string | null;
 
   @IsNumber()
   @IsNotEmpty()
@@ -43,27 +34,3 @@ export class CreatePlanDto {
   @IsNumber()
   sortOrder: number;
 }
-
-/*
-model Plan {
-  id              String       @id @default(uuid())
-  name            String       @unique 
-  description     String?
-  stripePriceId   String?      @unique
-  stripeProductId String?      @unique 
-  price           Float        @default(0) 
-  currency        Currency     @default(USD)
-  interval        PlanInterval 
-  features        Json
-  isActive        Boolean      @default(true)
-  sortOrder       Int          @default(0) 
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
-
-  subscriptions Subscription[]
-
-  @@index([isActive])
-  @@index([stripePriceId])
-  @@map("plans")
-}
-*/

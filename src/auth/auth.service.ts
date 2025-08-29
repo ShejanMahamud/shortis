@@ -10,6 +10,7 @@ import { Request } from 'express';
 import { User } from 'generated/prisma';
 import Redis from 'ioredis';
 import { REDIS_CLIENT } from 'src/queue/queue.module';
+import { SubscriptionService } from 'src/subscription/subscription.service';
 import { Util } from 'src/utils/util';
 import { GoogleLoginDto } from './dto/google-login.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -22,6 +23,7 @@ import {
   IAuthResponse,
   IAuthService,
   IJwtPayload,
+  ISessionMetadata,
   ITokenPair,
 } from './interfaces/auth.interface';
 import { TokenService, UserService } from './services';
@@ -34,6 +36,7 @@ export class AuthService implements IAuthService {
     private readonly tokenService: TokenService,
     @Inject(REDIS_CLIENT) private readonly redisClient: Redis,
     private readonly config: ConfigService,
+    private readonly subscriptionService: SubscriptionService,
   ) { }
 
   async loginOrCreateUser(
@@ -41,6 +44,33 @@ export class AuthService implements IAuthService {
   ): Promise<IAuthResponse<ITokenPair>> {
     try {
       const user = await this.userService.upsertUser(data.email, data);
+
+      // Check if user already has an active session
+      const existingSession = await this.getActiveSession(user.id);
+      if (existingSession) {
+        this.logger.log(`User ${user.id} already has an active session`);
+        return {
+          success: true,
+          message: 'Already logged in with active session!',
+          data: existingSession,
+        };
+      }
+
+      // Auto-subscribe user to free plan if they don't have an active subscription
+      try {
+        const subscriptionResult =
+          await this.subscriptionService.autoSubscribeToFreePlan(user.id);
+        if (subscriptionResult) {
+          this.logger.log(`User ${user.id} auto-subscribed to free plan`);
+        }
+      } catch (error) {
+        this.logger.warn(
+          `Failed to auto-subscribe user ${user.id} to free plan:`,
+          error,
+        );
+        // Don't fail the login process if subscription creation fails
+      }
+
       const tokens = this.tokenService.generateTokens(user);
 
       // Save refresh token in database
@@ -50,18 +80,8 @@ export class AuthService implements IAuthService {
         refreshTokenExp: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7), // 7 days
       });
 
-      await this.redisClient.set(
-        `access:${user.id}`,
-        tokens.accessToken,
-        'EX',
-        3600,
-      );
-      await this.redisClient.set(
-        `refresh:${user.id}`,
-        tokens.refreshToken,
-        'EX',
-        604800,
-      );
+      // Store session in Redis with metadata
+      await this.createUserSession(user.id, tokens);
 
       return {
         success: true,
@@ -81,6 +101,9 @@ export class AuthService implements IAuthService {
       if (!user) {
         throw new NotFoundException('User not found');
       }
+
+      // Update session activity
+      await this.updateSessionActivity(userId);
 
       return {
         success: true,
@@ -137,6 +160,11 @@ export class AuthService implements IAuthService {
         refreshTokenExp: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       });
 
+      // Update session with new tokens
+      await this.createUserSession(user.id!, newTokens);
+      // Update session activity
+      await this.updateSessionActivity(user.id!);
+
       return {
         success: true,
         message: 'Tokens refreshed successfully',
@@ -168,8 +196,8 @@ export class AuthService implements IAuthService {
         refreshTokenExp: null,
       });
 
-      await this.redisClient.del(`access:${userId}`);
-      await this.redisClient.del(`refresh:${userId}`);
+      // Clear session data using new session management
+      await this.clearUserSession(userId);
 
       return {
         success: true,
@@ -178,6 +206,164 @@ export class AuthService implements IAuthService {
     } catch (error) {
       this.logger.error('Logout failed', error);
       throw new Error('Logout failed');
+    }
+  }
+
+  /**
+   * Check if user has an active session in Redis
+   */
+  private async getActiveSession(userId: string): Promise<ITokenPair | null> {
+    try {
+      const accessToken = await this.redisClient.get(
+        `session:${userId}:access`,
+      );
+      const refreshToken = await this.redisClient.get(
+        `session:${userId}:refresh`,
+      );
+
+      if (accessToken && refreshToken) {
+        // Verify that the access token is still valid
+        try {
+          await this.tokenService.verifyAccessToken(accessToken);
+          return { accessToken, refreshToken };
+        } catch {
+          // If access token is invalid, clean up the session
+          await this.clearUserSession(userId);
+          return null;
+        }
+      }
+      return null;
+    } catch (error) {
+      this.logger.error(
+        `Failed to get active session for user ${userId}`,
+        error,
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Create a new user session in Redis
+   */
+  private async createUserSession(
+    userId: string,
+    tokens: ITokenPair,
+  ): Promise<void> {
+    try {
+      const sessionId = `session:${userId}`;
+      const accessTokenKey = `${sessionId}:access`;
+      const refreshTokenKey = `${sessionId}:refresh`;
+      const metadataKey = `${sessionId}:meta`;
+
+      // Store tokens with expiration
+      await this.redisClient.setex(accessTokenKey, 3600, tokens.accessToken); // 1 hour
+      await this.redisClient.setex(
+        refreshTokenKey,
+        604800,
+        tokens.refreshToken,
+      ); // 7 days
+
+      // Store session metadata
+      const sessionMetadata: ISessionMetadata = {
+        userId,
+        createdAt: new Date().toISOString(),
+        lastActivity: new Date().toISOString(),
+        isActive: true,
+      };
+      await this.redisClient.setex(
+        metadataKey,
+        604800,
+        JSON.stringify(sessionMetadata),
+      );
+
+      // Add user to active sessions set
+      await this.redisClient.sadd('active_sessions', userId);
+
+      this.logger.log(`Created new session for user ${userId}`);
+    } catch (error) {
+      this.logger.error(`Failed to create session for user ${userId}`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Clear user session from Redis
+   */
+  private async clearUserSession(userId: string): Promise<void> {
+    try {
+      const sessionId = `session:${userId}`;
+      const keys = [
+        `${sessionId}:access`,
+        `${sessionId}:refresh`,
+        `${sessionId}:meta`,
+      ];
+
+      await this.redisClient.del(...keys);
+      await this.redisClient.srem('active_sessions', userId);
+
+      this.logger.log(`Cleared session for user ${userId}`);
+    } catch (error) {
+      this.logger.error(`Failed to clear session for user ${userId}`, error);
+    }
+  }
+
+  /**
+   * Update session activity timestamp
+   */
+  private async updateSessionActivity(userId: string): Promise<void> {
+    try {
+      const metadataKey = `session:${userId}:meta`;
+      const metadataStr = await this.redisClient.get(metadataKey);
+
+      if (metadataStr) {
+        const metadata = JSON.parse(metadataStr) as ISessionMetadata;
+        metadata.lastActivity = new Date().toISOString();
+        await this.redisClient.setex(
+          metadataKey,
+          604800,
+          JSON.stringify(metadata),
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        `Failed to update session activity for user ${userId}`,
+        error,
+      );
+    }
+  }
+
+  /**
+   * Get all active sessions (admin functionality)
+   */
+  async getActiveSessions(): Promise<string[]> {
+    try {
+      return await this.redisClient.smembers('active_sessions');
+    } catch (error) {
+      this.logger.error('Failed to get active sessions', error);
+      return [];
+    }
+  }
+
+  /**
+   * Force logout user by clearing their session
+   */
+  async forceLogout(userId: string): Promise<IAuthResponse> {
+    try {
+      await this.clearUserSession(userId);
+
+      // Also clear database refresh token
+      await this.userService.updateUser(userId, {
+        refreshToken: null,
+        refreshTokenExp: null,
+      });
+
+      return {
+        success: true,
+        message: 'User forcefully logged out',
+      };
+    } catch (error) {
+      this.logger.error(`Failed to force logout user ${userId}`, error);
+      throw new Error('Force logout failed');
     }
   }
 

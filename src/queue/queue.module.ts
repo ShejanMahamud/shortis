@@ -67,9 +67,28 @@ const redisClientProvider: Provider = {
           },
         },
       },
+
+      {
+        name: 'billing',
+        defaultJobOptions: {
+          removeOnComplete: {
+            age: 3600,
+            count: 1000,
+          },
+          removeOnFail: {
+            age: 86400,
+            count: 100,
+          },
+          attempts: 3,
+          backoff: {
+            delay: 3000,
+            type: 'exponential',
+          },
+        },
+      },
     ),
   ],
   providers: [redisClientProvider],
   exports: [BullModule, REDIS_CLIENT],
 })
-export class QueueModule {}
+export class QueueModule { }

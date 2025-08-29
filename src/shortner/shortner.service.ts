@@ -42,29 +42,43 @@ export class ShortnerService implements IShortnerService {
     private readonly prisma: PrismaService,
     private readonly upload: UploadService,
     @Inject(REDIS_CLIENT) private readonly redisClient: Redis,
-  ) {}
+  ) { }
 
   async create(
     createShortnerDto: CreateShortnerDto,
-    userId?: string,
+    userId: string,
   ): Promise<IApiResponse<UrlEntity>> {
     try {
       const { customSlug, ...restDto } = createShortnerDto;
 
+      // 1. Check subscription limits before proceeding
+      const limitCheck = await this.validationService.checkSubscriptionLimit(
+        userId,
+        'MAX_URL',
+      );
+
+      if (!limitCheck.allowed) {
+        throw new Error(
+          `URL creation limit exceeded. Used: ${limitCheck.used}/${limitCheck.limit}`,
+        );
+      }
+
+      // 2. Validate URL and expiration date
       this.validationService.validateUrl(restDto.originalUrl);
       this.validationService.validateExpirationDate(
         restDto.expiresAt ? new Date(restDto.expiresAt) : undefined,
       );
 
-      // Generate unique slug
+      // 3. Generate unique slug
       const uniqueSlug =
         await this.validationService.generateUniqueSlug(customSlug);
 
-      //hash if password provided by user
+      // 4. Hash password if provided
       if (restDto.password) {
         restDto.password = await Util.hash(restDto.password);
       }
 
+      // 5. Create URL in database
       const url = await this.prisma.url.create({
         data: {
           slug: customSlug || uniqueSlug,
@@ -72,6 +86,10 @@ export class ShortnerService implements IShortnerService {
           ...restDto,
         },
       });
+
+      // 6. Increment usage counter
+      await this.validationService.incrementFeatureUsage(userId, 'MAX_URL');
+
       await this.generateQrCode(url.originalUrl, url.slug);
       this.logger.log(`Created URL: ${url.slug} for ${url.originalUrl}`);
 
@@ -381,5 +399,48 @@ export class ShortnerService implements IShortnerService {
       message: 'URL status toggled successfully!',
       data: updatedUrl,
     };
+  }
+
+  /**
+   * Get user's current feature usage and limits
+   */
+  async getUserUsageLimits(
+    userId: string,
+    featureKey: string,
+  ): Promise<IApiResponse<{ used: number; limit: number; allowed: boolean }>> {
+    try {
+      const usageInfo = await this.validationService.checkSubscriptionLimit(
+        userId,
+        featureKey,
+      );
+
+      return {
+        success: true,
+        message: 'Usage limits retrieved successfully',
+        data: usageInfo,
+      };
+    } catch (error) {
+      this.logger.error(`Error getting usage limits: ${error}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Check if user can perform an action based on their subscription limits
+   */
+  async canUserPerformAction(
+    userId: string,
+    featureKey: string,
+  ): Promise<boolean> {
+    try {
+      const limitCheck = await this.validationService.checkSubscriptionLimit(
+        userId,
+        featureKey,
+      );
+      return limitCheck.allowed;
+    } catch (error) {
+      this.logger.warn(`Could not check user limits: ${error}`);
+      return false; // Fail safely
+    }
   }
 }

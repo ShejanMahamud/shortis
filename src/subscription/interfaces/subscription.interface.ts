@@ -1,11 +1,8 @@
-import {
-    PaymentMethod,
-    Subscription,
-    SubscriptionStatus,
-} from 'generated/prisma';
+import { PaymentMethod, SubscriptionStatus } from 'generated/prisma';
 import { IApiResponse } from 'src/interfaces';
 import { IPlanFeature } from 'src/plan/interfaces';
 import { CreateSubscriptionDto } from '../dto/create-subscription.dto';
+import { UpdateSubscriptionDto } from '../dto/update-subscription.dto';
 
 export interface ISubscription {
     id: string;
@@ -29,11 +26,12 @@ export interface ISubscription {
 export interface ISubscriptionService {
     createSubscription(
         dto: CreateSubscriptionDto,
-    ): Promise<IApiResponse<Subscription>>;
-    // updateSubscription(
-    //     id: string,
-    //     dto: UpdateSubscriptionDto,
-    // ): Promise<Subscription>;
+    ): Promise<IApiResponse<ISubscription>>;
+    updateSubscription(
+        id: string,
+        dto: UpdateSubscriptionDto,
+        userId: string,
+    ): Promise<IApiResponse<ISubscription>>;
     // getSubscription(id: string): Promise<Subscription>;
     // cancelSubscription(id: string): Promise<void>;
 }

@@ -3,6 +3,7 @@ import { UploadModule } from 'src/upload/upload.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { AnalyticsProcessor } from './services/analytics.processor';
 import { AnalyticsService } from './services/analytics.service';
+import { BillingProcessor } from './services/billing.processor';
 import { ValidationService } from './services/validation.service';
 import { ShortnerController } from './shortner.controller';
 import { ShortnerService } from './shortner.service';
@@ -15,7 +16,8 @@ import { ShortnerService } from './shortner.service';
     AnalyticsService,
     ValidationService,
     AnalyticsProcessor,
+    BillingProcessor,
   ],
   exports: [ShortnerService, AnalyticsService, ValidationService],
 })
-export class ShortnerModule {}
+export class ShortnerModule { }

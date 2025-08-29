@@ -6,7 +6,10 @@ import {
   Param,
   Patch,
   Post,
+  UseGuards,
 } from '@nestjs/common';
+import { AccessAuthGuard, RolesGuard } from 'src/auth';
+import { Role, Roles } from 'src/auth/decorators';
 import { CreatePlanFeatureDto } from './dto/create-plan-feature.dto';
 import { CreatePlanDto } from './dto/create-plan.dto';
 import { UpdatePlanFeatureDto } from './dto/update-plan-feature.dto';
@@ -14,14 +17,14 @@ import { UpdatePlanDto } from './dto/update-plan.dto';
 import { PlanService } from './plan.service';
 import { PlanFeatureService } from './services/plan-feature.service';
 
-// @UseGuards(AccessAuthGuard, RolesGuard)
-// @Roles(Role.ADMIN)
+@UseGuards(AccessAuthGuard, RolesGuard)
+@Roles(Role.ADMIN)
 @Controller('plan')
 export class PlanController {
   constructor(
     private readonly planService: PlanService,
     private readonly planFeatureService: PlanFeatureService,
-  ) {}
+  ) { }
 
   @Post()
   create(@Body() createPlanDto: CreatePlanDto) {

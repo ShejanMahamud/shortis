@@ -30,6 +30,21 @@ export interface ISubscriptionService {
         dto: UpdateSubscriptionDto,
         userId: string,
     ): Promise<IApiResponse<ISubscription>>;
-    // getSubscription(id: string): Promise<Subscription>;
-    // cancelSubscription(id: string): Promise<void>;
+    findASubscription(id: string): Promise<IApiResponse<ISubscription | null>>;
+
+    getAllSubscription(
+        limit: number,
+        cursor?: string,
+        userId?: string,
+    ): Promise<
+        IApiResponse<
+            ISubscription[],
+            {
+                limit: number;
+                count: number;
+                hasNextPage: boolean;
+                nextCursor: string;
+            }
+        >
+    >;
 }

@@ -1,4 +1,5 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from 'generated/prisma/wasm';
 import Redis from 'ioredis';
 import { IApiResponse } from 'src/interfaces';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -293,6 +294,101 @@ export class SubscriptionService implements ISubscriptionService {
       }
     } catch (error) {
       console.error('Failed to upgrade subscription:', error);
+      throw error;
+    }
+  }
+
+  public async getAllSubscription(
+    limit: number,
+    cursor?: string,
+    userId?: string,
+  ): Promise<
+    IApiResponse<
+      ISubscription[],
+      {
+        limit: number;
+        count: number;
+        hasNextPage: boolean;
+        nextCursor: string;
+      }
+    >
+  > {
+    try {
+      const queryOptions: Prisma.SubscriptionFindManyArgs = {
+        take: limit,
+        orderBy: {
+          createdAt: 'desc',
+        },
+        ...(userId && {
+          where: {
+            userId,
+          },
+        }),
+        ...(cursor && {
+          skip: 1,
+          cursor: {
+            id: cursor,
+          },
+        }),
+      };
+      const subscriptions =
+        await this.prisma.subscription.findMany(queryOptions);
+      const hasNextPage = subscriptions.length === limit;
+      const nextCursor = hasNextPage
+        ? subscriptions[subscriptions.length - 1].id
+        : null;
+      return {
+        success: true,
+        data: subscriptions,
+        meta: {
+          limit,
+          count: subscriptions.length,
+          hasNextPage,
+          nextCursor,
+        },
+      };
+    } catch (error) {
+      console.error('Failed to get all subscriptions:', error);
+      throw error;
+    }
+  }
+
+  public async cancelSubscription(id: string, userId: string) {
+    try {
+      await this.prisma.subscription.update({
+        where: {
+          id,
+          userId,
+          status: 'ACTIVE',
+          currentPeriodEnd: { gte: new Date() },
+          currentPeriodStart: { lte: new Date() },
+        },
+        data: {
+          status: 'CANCELED',
+          canceledAt: new Date(),
+        },
+      });
+      return {
+        success: true,
+        message: 'Subscription canceled successfully',
+      };
+    } catch (error) {
+      console.error('Failed to cancel subscription:', error);
+      throw error;
+    }
+  }
+
+  public async deleteSubscription(id: string) {
+    try {
+      await this.prisma.subscription.delete({
+        where: { id },
+      });
+      return {
+        success: true,
+        message: 'Subscription deleted successfully',
+      };
+    } catch (error) {
+      console.error('Failed to delete subscription:', error);
       throw error;
     }
   }

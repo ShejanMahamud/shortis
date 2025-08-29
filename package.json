@@ -35,6 +35,7 @@
     "@prisma/client": "6.14.0",
     "argon2": "^0.44.0",
     "autocannon": "^8.0.0",
+    "bkash-js": "1.1.3",
     "bullmq": "^5.58.1",
     "cache-manager": "^7.1.1",
     "class-transformer": "^0.5.1",

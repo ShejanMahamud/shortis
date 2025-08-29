@@ -4,10 +4,9 @@ import { IApiResponse } from 'src/interfaces';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { REDIS_CLIENT } from 'src/queue/queue.module';
 import {
-  ClickData,
   ClickEntity,
   IAnalyticsService,
-  UrlAnalytics,
+  UrlAnalytics
 } from '../interfaces/shortner.interface';
 
 @Injectable()
@@ -15,7 +14,7 @@ export class AnalyticsService implements IAnalyticsService {
   constructor(
     private readonly prisma: PrismaService,
     @Inject(REDIS_CLIENT) private readonly redisClient: Redis,
-  ) {}
+  ) { }
 
   private async getUrlClicks(
     urlId: string,
@@ -87,12 +86,6 @@ export class AnalyticsService implements IAnalyticsService {
     return uniqueIps.size;
   }
 
-  private async createClick(data: ClickData): Promise<ClickEntity> {
-    return this.prisma.click.create({
-      data,
-    });
-  }
-
   async createOrUpdateAnalytics(
     urlId: string,
     date: Date,
@@ -146,17 +139,6 @@ export class AnalyticsService implements IAnalyticsService {
       }));
   }
 
-  private async incrementClickCount(id: string): Promise<void> {
-    await this.prisma.url.update({
-      where: { id },
-      data: {
-        totalClicks: {
-          increment: 1,
-        },
-      },
-    });
-  }
-
   async recordClick(
     urlId: string,
     userId: string | null,
@@ -190,20 +172,6 @@ export class AnalyticsService implements IAnalyticsService {
         await this.redisClient.incr(`uniqueCount:${urlId}`);
       }
     }
-  }
-
-  private async isUniqueClick(
-    urlId: string,
-    ipAddress: string | null,
-  ): Promise<boolean> {
-    if (!ipAddress) return false;
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const existingClicks = await this.getUrlClicks(urlId, today);
-
-    return !existingClicks.some((click) => click.ipAddress === ipAddress);
   }
 
   private getCountryFromIP(ipAddress: string | null): string {

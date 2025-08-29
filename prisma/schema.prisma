@@ -20,7 +20,7 @@ model User {
   profilePicture   String?
   isActive         Boolean   @default(true)
   emailVerified    Boolean   @default(false)
-  stripeCustomerId String?   @unique 
+  stripeCustomerId String?   @unique
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -28,6 +28,9 @@ model User {
   clicks         Click[]
   subscriptions  Subscription[]
   paymentHistory PaymentHistory[]
+  UsageHistory   UsageHistory[]
+  FeatureUsage   FeatureUsage[]
+  Notification   Notification[]
 
   @@index([email])
   @@index([isActive])
@@ -41,14 +44,14 @@ model Url {
   slug         String    @unique
   title        String?
   qrCode       String?
-  description  String? 
-  userId       String? 
+  description  String?
+  userId       String?
   isActive     Boolean   @default(true)
   expiresAt    DateTime?
   password     String?
-  customDomain String? 
+  customDomain String?
   clickLimit   Int?
-  totalClicks  Int       @default(0) 
+  totalClicks  Int       @default(0)
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
@@ -67,7 +70,7 @@ model Url {
 model Click {
   id        String   @id @default(uuid())
   urlId     String
-  userId    String? 
+  userId    String?
   ipAddress String?
   userAgent String?
   referer   String?
@@ -91,7 +94,7 @@ model Click {
 model Analytics {
   id           String   @id @default(uuid())
   urlId        String
-  date         DateTime @db.Date 
+  date         DateTime @db.Date
   clickCount   Int      @default(0)
   uniqueClicks Int      @default(0)
   createdAt    DateTime @default(now())
@@ -107,36 +110,91 @@ model Analytics {
 
 model Plan {
   id              String       @id @default(uuid())
-  name            String       @unique 
-  description     String?
+  name            String       @unique
+  description     String
   stripePriceId   String?      @unique
-  stripeProductId String?      @unique 
-  price           Float        @default(0) 
+  stripeProductId String?      @unique
+  price           Float        @default(0)
   currency        Currency     @default(USD)
-  interval        PlanInterval 
-  features        Json
+  interval        PlanInterval
   isActive        Boolean      @default(true)
-  sortOrder       Int          @default(0) 
+  sortOrder       Int          @default(0)
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
   subscriptions Subscription[]
+  PlanFeature   PlanFeature[]
+  UsageHistory  UsageHistory[]
 
   @@index([isActive])
   @@index([stripePriceId])
   @@map("plans")
 }
 
+model PlanFeature {
+  id        String   @id @default(uuid())
+  planId    String
+  key       String // e.g., "MAX_URLS", "CUSTOM_DOMAINS"
+  value     String // e.g., "100", "true"
+  plan      Plan     @relation(fields: [planId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([planId, key])
+  @@index([planId])
+  @@index([key])
+  @@map("plan_features")
+}
+
+model UsageHistory {
+  id          String   @id @default(uuid())
+  userId      String
+  planId      String
+  description String
+  usedAt      DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan Plan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([planId])
+  @@map("usage_history")
+}
+
+model FeatureUsage {
+  id             String   @id @default(uuid())
+  userId         String
+  subscriptionId String
+  featureKey     String // e.g. "MAX_URLS"
+  used           Int      @default(0) // current usage count
+  periodStart    DateTime
+  periodEnd      DateTime
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, subscriptionId, featureKey, periodStart, periodEnd])
+  @@index([userId])
+  @@index([subscriptionId])
+  @@index([featureKey])
+  @@index([periodEnd])
+  @@map("feature_usage")
+}
+
 model Subscription {
   id                   String             @id @default(uuid())
   userId               String
   planId               String
-  stripeSubscriptionId String?            @unique 
-  stripeCustomerId     String? 
+  stripeSubscriptionId String?            @unique
+  stripeCustomerId     String?
   status               SubscriptionStatus @default(INACTIVE)
   paymentMethod        PaymentMethod      @default(STRIPE)
-  currentPeriodStart   DateTime?
-  currentPeriodEnd     DateTime?
+  currentPeriodStart   DateTime
+  currentPeriodEnd     DateTime
   cancelAtPeriodEnd    Boolean            @default(false)
   canceledAt           DateTime?
   createdAt            DateTime           @default(now())
@@ -145,6 +203,7 @@ model Subscription {
   user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   plan           Plan             @relation(fields: [planId], references: [id], onDelete: Restrict)
   paymentHistory PaymentHistory[]
+  FeatureUsage   FeatureUsage[]
 
   @@index([userId])
   @@index([planId])
@@ -158,10 +217,10 @@ model PaymentHistory {
   id              String        @id @default(uuid())
   userId          String
   subscriptionId  String?
-  stripePaymentId String?       @unique 
-  stripeInvoiceId String?       @unique 
-  bkashPaymentId String?       @unique 
-  amount          Float 
+  stripePaymentId String?       @unique
+  stripeInvoiceId String?       @unique
+  bkashPaymentId  String?       @unique
+  amount          Float
   currency        Currency      @default(USD)
   status          PaymentStatus @default(PENDING)
   description     String?
@@ -183,14 +242,14 @@ model PaymentHistory {
 }
 
 model WebhookEvent {
-  id              String    @id @default(uuid())
-  stripeEventId   String    @unique 
+  id              String        @id @default(uuid())
+  stripeEventId   String        @unique
   eventType       String
   provider        PaymentMethod @default(STRIPE)
-  processed       Boolean   @default(false)
+  processed       Boolean       @default(false)
   processingError String?
-  data            Json 
-  createdAt       DateTime  @default(now())
+  data            Json
+  createdAt       DateTime      @default(now())
   processedAt     DateTime?
 
   @@index([stripeEventId])
@@ -198,6 +257,27 @@ model WebhookEvent {
   @@index([eventType])
   @@index([createdAt])
   @@map("webhook_events")
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String
+  type      NotificationType @default(INFO)
+  message   String
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("notifications")
+}
+
+enum NotificationType {
+  INFO
+  WARNING
+  ERROR
 }
 
 enum Role {
@@ -218,7 +298,6 @@ enum SubscriptionStatus {
   PAST_DUE
   CANCELED
   UNPAID
-  TRIALING
   PAUSED
 }
 

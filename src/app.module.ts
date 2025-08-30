@@ -1,15 +1,16 @@
-import { CacheModule } from '@nestjs/cache-manager';
+import { CacheModule as NestCacheModule } from '@nestjs/cache-manager';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AuthModule } from './auth/auth.module';
+import { BkashModule } from './bkash/bkash.module';
+import { CacheModule } from './cache/cache.module';
+import { PlanModule } from './plan/plan.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { QueueModule } from './queue/queue.module';
 import { ShortnerModule } from './shortner/shortner.module';
-import { TaskModule } from './task/task.module';
-import { PlanModule } from './plan/plan.module';
-import { BkashModule } from './bkash/bkash.module';
 import { SubscriptionModule } from './subscription/subscription.module';
+import { TaskModule } from './task/task.module';
 
 @Module({
   imports: [
@@ -17,7 +18,7 @@ import { SubscriptionModule } from './subscription/subscription.module';
       isGlobal: true,
       envFilePath: '.env',
     }),
-    CacheModule.register({
+    NestCacheModule.register({
       isGlobal: true,
     }),
     TaskModule,
@@ -28,8 +29,9 @@ import { SubscriptionModule } from './subscription/subscription.module';
     PlanModule,
     BkashModule,
     SubscriptionModule,
+    CacheModule,
   ],
   controllers: [AppController],
   providers: [],
 })
-export class AppModule {}
+export class AppModule { }

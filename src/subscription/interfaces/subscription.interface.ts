@@ -36,15 +36,5 @@ export interface ISubscriptionService {
         limit: number,
         cursor?: string,
         userId?: string,
-    ): Promise<
-        IApiResponse<
-            ISubscription[],
-            {
-                limit: number;
-                count: number;
-                hasNextPage: boolean;
-                nextCursor: string;
-            }
-        >
-    >;
+    ): Promise<IApiResponse<ISubscription[]>>;
 }

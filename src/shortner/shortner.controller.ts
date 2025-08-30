@@ -22,7 +22,9 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
-import { AccessAuthGuard } from 'src/auth';
+import { RolesGuard } from 'src/auth';
+import { Role, Roles } from 'src/auth/decorators';
+import { AccessAuthGuard } from 'src/auth/guards/access.guard';
 import { IJwtPayload } from '../auth/interfaces/auth.interface';
 import { AccessUrlDto } from './dto/access-url.dto';
 import { CreateShortnerDto } from './dto/create-shortner.dto';
@@ -32,7 +34,6 @@ import { ShortnerService } from './shortner.service';
 
 @ApiTags('URL Shortener')
 @ApiBearerAuth()
-@UseGuards(AccessAuthGuard)
 @Controller('shortner')
 export class ShortnerController {
   constructor(private readonly shortnerService: ShortnerService) { }
@@ -46,6 +47,7 @@ export class ShortnerController {
   @ApiResponse({ status: 201, description: 'URL created successfully' })
   @ApiResponse({ status: 400, description: 'Bad request - invalid input' })
   @ApiResponse({ status: 409, description: 'Slug already exists' })
+  @UseGuards(AccessAuthGuard)
   async create(
     @Body() createShortnerDto: CreateShortnerDto,
     @Req() req: Request,
@@ -57,6 +59,8 @@ export class ShortnerController {
   @Get()
   @ApiOperation({ summary: 'Get all URLs (paginated)' })
   @ApiResponse({ status: 200, description: 'URLs retrieved successfully' })
+  @UseGuards(AccessAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
   async findAll(
     @Req() req: Request,
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
@@ -71,6 +75,7 @@ export class ShortnerController {
   @ApiResponse({ status: 200, description: 'URL details retrieved' })
   @ApiResponse({ status: 404, description: 'URL not found' })
   @ApiResponse({ status: 403, description: 'Unauthorized access' })
+  @UseGuards(AccessAuthGuard)
   async findOne(@Param('id') id: string, @Req() req: Request) {
     const userId = this.getUserFromRequest(req)?.sub;
     return this.shortnerService.findOne(id, userId);
@@ -81,6 +86,7 @@ export class ShortnerController {
   @ApiResponse({ status: 200, description: 'Analytics retrieved successfully' })
   @ApiResponse({ status: 404, description: 'URL not found' })
   @ApiResponse({ status: 403, description: 'Unauthorized access' })
+  @UseGuards(AccessAuthGuard)
   async getAnalytics(
     @Param('id') id: string,
     @Query() analyticsDto: GetAnalyticsDto,
@@ -138,6 +144,7 @@ export class ShortnerController {
   @ApiResponse({ status: 200, description: 'URL updated successfully' })
   @ApiResponse({ status: 404, description: 'URL not found' })
   @ApiResponse({ status: 403, description: 'Unauthorized access' })
+  @UseGuards(AccessAuthGuard)
   async update(
     @Param('id') id: string,
     @Body() updateShortnerDto: UpdateShortnerDto,
@@ -152,6 +159,7 @@ export class ShortnerController {
   @ApiResponse({ status: 200, description: 'URL status toggled successfully' })
   @ApiResponse({ status: 404, description: 'URL not found' })
   @ApiResponse({ status: 403, description: 'Unauthorized access' })
+  @UseGuards(AccessAuthGuard)
   async toggleStatus(@Param('id') id: string, @Req() req: Request) {
     const userId = this.getUserFromRequest(req)?.sub;
     return this.shortnerService.toggleUrlStatus(id, userId);
@@ -163,6 +171,7 @@ export class ShortnerController {
   @ApiResponse({ status: 204, description: 'URL deleted successfully' })
   @ApiResponse({ status: 404, description: 'URL not found' })
   @ApiResponse({ status: 403, description: 'Unauthorized access' })
+  @UseGuards(AccessAuthGuard)
   async remove(@Param('id') id: string, @Req() req: Request) {
     const userId = this.getUserFromRequest(req)?.sub;
     await this.shortnerService.remove(id, userId);

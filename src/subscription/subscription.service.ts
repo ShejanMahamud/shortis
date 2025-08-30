@@ -302,17 +302,7 @@ export class SubscriptionService implements ISubscriptionService {
     limit: number,
     cursor?: string,
     userId?: string,
-  ): Promise<
-    IApiResponse<
-      ISubscription[],
-      {
-        limit: number;
-        count: number;
-        hasNextPage: boolean;
-        nextCursor: string;
-      }
-    >
-  > {
+  ): Promise<IApiResponse<ISubscription[]>> {
     try {
       const queryOptions: Prisma.SubscriptionFindManyArgs = {
         take: limit,
@@ -334,17 +324,19 @@ export class SubscriptionService implements ISubscriptionService {
       const subscriptions =
         await this.prisma.subscription.findMany(queryOptions);
       const hasNextPage = subscriptions.length === limit;
-      const nextCursor = hasNextPage
-        ? subscriptions[subscriptions.length - 1].id
-        : null;
+      const nextCursor =
+        subscriptions.length > 0
+          ? subscriptions[subscriptions.length - 1].id
+          : null;
       return {
         success: true,
+        message: 'Fetched all subscriptions successfully',
         data: subscriptions,
         meta: {
           limit,
           count: subscriptions.length,
           hasNextPage,
-          nextCursor,
+          nextCursor: nextCursor,
         },
       };
     } catch (error) {

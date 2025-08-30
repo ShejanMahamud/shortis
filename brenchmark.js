@@ -1,7 +1,7 @@
 const autocannon = require('autocannon');
 
 const instance = autocannon({
-  url: 'http://localhost:4545/v1/api/shortner/r/r8mR9H',
+  url: 'https://shortis-api.shejan.me/v1/api/shortner/r/gc0Fs0',
   connections: 50,
   duration: 20,
   pipelining: 10

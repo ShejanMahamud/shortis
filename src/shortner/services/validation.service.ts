@@ -35,10 +35,13 @@ export class ValidationService implements IValidationService {
     userId: string,
     subscriptionId: string,
     featureKey: string,
-    periodStart: Date,
-    periodEnd: Date,
+    periodStart: Date | string,
+    periodEnd: Date | string,
   ): string {
-    return `feature_usage:${userId}:${subscriptionId}:${featureKey}:${periodStart.toISOString()}:${periodEnd.toISOString()}`;
+    const startDate =
+      periodStart instanceof Date ? periodStart : new Date(periodStart);
+    const endDate = periodEnd instanceof Date ? periodEnd : new Date(periodEnd);
+    return `feature_usage:${userId}:${subscriptionId}:${featureKey}:${startDate.toISOString()}:${endDate.toISOString()}`;
   }
 
   private getActiveSubscriptionKey(userId: string): string {
@@ -52,9 +55,10 @@ export class ValidationService implements IValidationService {
   /**
    * Calculate TTL in seconds based on end date
    */
-  private calculateTtlSeconds(endDate: Date): number {
+  private calculateTtlSeconds(endDate: Date | string): number {
+    const date = endDate instanceof Date ? endDate : new Date(endDate);
     return Math.max(
-      Math.floor((endDate.getTime() - Date.now()) / 1000),
+      Math.floor((date.getTime() - Date.now()) / 1000),
       this.DEFAULT_REDIS_TTL,
     );
   }
@@ -185,7 +189,17 @@ export class ValidationService implements IValidationService {
     const cachedSubscription =
       await this.getCachedData<ISubscription>(redisKey);
     if (cachedSubscription) {
-      return cachedSubscription;
+      // Ensure dates are properly converted from strings to Date objects
+      return {
+        ...cachedSubscription,
+        currentPeriodStart: new Date(cachedSubscription.currentPeriodStart),
+        currentPeriodEnd: new Date(cachedSubscription.currentPeriodEnd),
+        createdAt: new Date(cachedSubscription.createdAt),
+        updatedAt: new Date(cachedSubscription.updatedAt),
+        canceledAt: cachedSubscription.canceledAt
+          ? new Date(cachedSubscription.canceledAt)
+          : null,
+      };
     }
 
     // Fetch from database
